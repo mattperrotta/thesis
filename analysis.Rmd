@@ -1,0 +1,108 @@
+---
+title: "Analysis"
+author: "Matthew Perrotta"
+date: "April 20, 2019"
+output: html_document
+---
+
+Data analysis for MPH Epidemiology thesis requirement.
+
+Research Question: What is the best predictor of standardized malaria rate (SMR) in the Malaysian regions of Sarawak and Sabah.
+
+Methods:
+-Exploratory data analysis and visualizations
+-multiple linear regression
+-more advanced linear regression methods
+-GAM
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+```{r}
+library(tidyverse)
+library(mgcv)
+library(corrplot)
+```
+
+### Import data
+```{r}
+swk = read.csv('./data/data_full_sar.csv') %>% 
+  janitor::clean_names() %>% 
+  select(-c('x',
+            'population_year',
+            'cases_year',
+            'expected',
+            'sd')) %>% 
+  rename('smr' = 'sir',
+         'prec_mean' = 'mean',
+         'cases' = 'case_number')
+
+sbh = read.csv('./data/dataFull.csv') %>% 
+  group_by(District, Year) %>% 
+  mutate(district_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area 
+         ) %>% 
+  ungroup() %>% 
+  group_by(District) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
+         Herbaceous.prop = Herbaceous.total.area/district_area,
+         TreeShrub.prop = TreeShrub.total.area/district_area,
+         MosCrop.prop = MosCrop.total.area/district_area,
+         MosNatural.prop = MosNatural.total.area/district_area,
+         BroadEvgClop.prop = BroadEvgClop.total.area/district_area,
+         Shrub.prop = Shrub.total.area/district_area,
+         ShrubEvg.prop = ShrubEvg.total.area/district_area,
+         SparseVeg.prop = SparseVeg.total.area/district_area,
+         FloodFresh.prop = FloodFresh.total.area/district_area,
+         FloodSalt.prop = FloodSalt.total.area/district_area,
+         Urban.prop = Urban.total.area/district_area,
+         Water.prop = Water.total.area/district_area,
+         CropIrrigate.prop = CropIrrigate.total.area/district_area) %>% 
+  janitor::clean_names() %>%
+  ungroup() %>%
+  select(-c('x', 
+            'disease', 
+            'number_deaths', 
+            'mortality_rates',
+            'prevalence',
+            'incidence_rate')) %>% 
+  rename('cases' = 'number_cases')
+```
+
+
+```{r}
+x = model.matrix(smr ~ ., sbh)[ , -1]
+
+theme1 <- trellis.par.get()
+theme1$plot.symbol$col <- rgb(.2, .4, .2, .5)
+theme1$plot.symbol$pch <- 16
+theme1$plot.line$col <- rgb(.8, .1, .1, 1)
+theme1$plot.line$lwd <- 2
+theme1$strip.background$col <- rgb(.0, .2, .6, .2)
+trellis.par.set(theme1)
+featurePlot(X, y, plot = "scatter", labels = c("","Y"),
+            type = c("p"), layout = c(4, 2))
+```
+
+```{r}
+gam1 = gam(smr ~ s(prec_mean, by = district) + district, data = sbh, method = 'REML')
+
+summary(gam1)
+plot(gam1)
+```
+
