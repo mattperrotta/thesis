@@ -1,0 +1,1007 @@
+---
+title: "Untitled"
+author: "Matthew Perrotta"
+date: "April 20, 2019"
+output: html_document
+---
+
+```{r Load packages, echo=TRUE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(cache=TRUE)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(cowplot)
+library(splm)
+library(plm)
+library(leaflet)
+```
+
+#### Read data 
+ - Read data_full.csv. The data_full dataset contains data on malaria cases, land use cover, precipations, and Standarized Mortality Ratio (SMR).
+ - Read SpatialPolygonDataFrame *sab*. sab contains spatial data on the location of the 25 Sabah districts.
+```{r Read data}
+P <- rprojroot::find_rstudio_root_file
+data_full <- read.csv('./data/dataFull.csv') 
+  data_full <- data_full[-1]   
+    data_full <- data_full[-3]
+data_full <- data_full[complete.cases(data_full[,3]),] 
+  data_full <- data.frame(data_full)
+sab <- Sabah_shp
+```
+
+#### Calculate SMR:
+ * We will use the Standardized Mortality Ratio (SMR) as a measure of incidence of malaria in each district.  
+ * SMR is a ratio between the observed number of malaria cases in an study population and the number of malaria cases would be expected, based on rates in a standard population and the distribution by district of the study population.
+ * We calculate the SMR for district *i* as: 
+ 
+ $$SMR_i = \frac{O(Observed \space number \space of \space cases_i)}{E(Expected \space number \space of \space cases_i)}$$
+where
+ 
+ $$ Expected \space number \space of \space cases_i = Population_i * \sum(Observed_i) / \sum(Population_i) $$
+ 
+ 
+ 
+ * There are 2 ways to calculate SMR:
+    + 1. Based on the sum of the average of all years (SMR) 
+  
+```{r, echo=TRUE}
+data_full = data_full %>% 
+  arrange(Year) %>% 
+  group_by(Year) %>%
+  dplyr::mutate(SMR = Number.Cases/((sum(Number.Cases)/sum(population))*population))
+```
+
+- Divide total land areas by 100,000 
+
+```{r}
+data_full <- data_full %>%
+  arrange(District) %>% 
+  group_by(District, Year) %>%
+  mutate(CropRainfed.total.area = CropRainfed.total.area/100000) %>%
+  mutate(Herbaceous.total.area = Herbaceous.total.area/100000) %>%
+  mutate(TreeShrub.total.area = TreeShrub.total.area/100000) %>%
+  mutate(MosCrop.total.area = MosCrop.total.area/100000) %>%
+  mutate(MosNatural.total.area = MosNatural.total.area/100000) %>%
+  mutate(BroadEvgClop.total.area = BroadEvgClop.total.area/100000) %>%
+  mutate(Shrub.total.area = Shrub.total.area/100000) %>%
+  mutate(ShrubEvg.total.area = ShrubEvg.total.area/100000) %>%
+  mutate(SparseVeg.total.area = SparseVeg.total.area/100000) %>%
+  mutate(FloodFresh.total.area = FloodFresh.total.area/100000) %>%
+  mutate(FloodSalt.total.area = FloodSalt.total.area/100000) %>%
+  mutate(Urban.total.area = Urban.total.area/100000) %>%
+  mutate(Water.total.area = Water.total.area/100000) %>%
+  mutate(CropIrrigate.total.area = CropIrrigate.total.area/100000) %>%
+ mutate(total_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area 
+         ) 
+```
+
+Calculate total area for Sabah
+```{r}
+total <- data_full %>%
+  group_by(Year) %>%
+  mutate(total = sum(total_area))
+```
+
+- Generate proportion areas for each land use
+
+```{r echo=FALSE}
+data_full <- data_full %>%
+  arrange(District) %>% 
+  group_by(District) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/total_area) %>%
+  mutate(Herbaceous.prop = Herbaceous.total.area/total_area) %>%
+  mutate(TreeShrub.prop = TreeShrub.total.area/total_area) %>%
+  mutate(MosCrop.prop = MosCrop.total.area/total_area) %>%
+  mutate(MosNatural.prop = MosNatural.total.area/total_area) %>%
+  mutate(BroadEvgClop.prop = BroadEvgClop.total.area/total_area) %>%
+  mutate(Shrub.prop = Shrub.total.area/total_area) %>%
+  mutate(ShrubEvg.prop = ShrubEvg.total.area/total_area) %>%
+  mutate(SparseVeg.prop = SparseVeg.total.area/total_area) %>%
+  mutate(FloodFresh.prop = FloodFresh.total.area/total_area) %>%
+  mutate(FloodSalt.prop = FloodSalt.total.area/total_area) %>%
+  mutate(Urban.prop = Urban.total.area/total_area) %>%
+  mutate(Water.prop = Water.total.area/total_area) %>%
+  mutate(CropIrrigate.prop = CropIrrigate.total.area/total_area) 
+```
+
+```{r}
+data_full <- data_full %>%
+mutate(SMRA = SMR/total_area)
+SMRA <- ggplot(data = data_full, aes(x = District, y = SMRA, group = District)) +  
+  geom_boxplot( outlier.shape=NA ) +  
+  geom_jitter() +
+  ylim(0, 4) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title='Standarized Mortality Ratio by district area in Sabah, Malaysia', y="SMRA") 
+ 
+```
+
+
+```{r}
+ggplot(data = data_full, aes(x = Year, y = Number.Cases, fill=District)) +  
+  geom_smooth( ) + 
+  geom_jitter() +
+  ylim(0, 1500) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title='Number of malaria cases in Sabah, Malaysia', y="Number of cases ") 
+ 
+```
+
+
+#Plots of SMR based on average district number of cases by Districts and Years
+
+```{r}
+library(graphics)
+library(gridExtra)
+# Plots 
+#par(mfrow=c(1,2))
+# boxplot(SMR ~ Year, xlab = "Year",
+#         ylab = "Standarized Mortality Ratio (SMR)",connect=T, data=data_full, outline=F, col = "lightgray")
+# boxplot(SMR ~ District, xlab = "Districts",
+#         ylab = "Standarized Mortality Ratio (SMR)",connect=T, data=data_full, outline=F, col = "lightgray")
+plot1 <- ggplot(data = data_full, aes(x = District, y = SMR, group = District)) +  
+  geom_boxplot(outlier.shape=NA ) +  
+  ylim(0, 6.5) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(y="Standarized Mortality Ratio (SMR)")
+   
+plot2 <- ggplot(data = data_full, aes(x = Year, y = SMR, group = Year)) +  
+  geom_boxplot(outlier.shape=NA  ) + ylim(0, 6.5) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y="Standarized Mortality Ratio (SMR)")
+require(cowplot)
+plot_grid(plot1, plot2, align='h', labels=c('', ''))
+```
+
+
+
+or   
+      + 2. Based on the sum of the average of all districts (SMR_d) 
+
+```{r, echo=TRUE}
+data_full = data_full %>% 
+  arrange(District) %>% 
+  group_by(District) %>%
+  mutate(SMR_d = Number.Cases/((sum(Number.Cases)/sum(population))*population))
+```
+
+```{r}
+# par(mfrow=c(1,2))
+# boxplot(SMR_d ~ Year, xlab = "Year",
+#         ylab = "Standarized Mortality Ratio (SMR)",connect=T, data=data_full, outline=F, col = "lightgray")
+# boxplot(SMR_d ~ District, xlab = "Districts",
+#         ylab = "Standarized Mortality Ratio (SMR)",connect=T, data=data_full, outline=F, col = "lightgray")
+plot3 <- ggplot(data = data_full, aes(x = District, y = SMR_d, group = District)) +  
+  geom_boxplot(outlier.shape=NA ) +  
+  ylim(0, 6.5) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(y="Standarized Mortality Ratio (SMR)")
+   
+plot4 <- ggplot(data = data_full, aes(x = Year, y = SMR_d, group = Year)) +  
+  geom_boxplot(outlier.shape=NA  ) + ylim(0, 6.5) +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  labs(y="Standarized Mortality Ratio (SMR)") 
+  
+require(cowplot)
+plot_grid(plot3, plot4, align='h', labels=c('', ''))
+```
+
+
+```{r}
+pdf("Figure1and3.pdf")
+grid.arrange(plot1, plot3, ncol=2)
+dev.off()
+```
+```{r}
+pdf("Figure2and4.pdf")
+grid.arrange(plot2, plot4, ncol=2)
+dev.off()
+```
+
+ The study area is Sabah, Malaysia. Sabah is divided in 25 districts. 
+ 
+```{r, echo=F}
+library(leaflet)
+leaflet(sab) %>%
+  addPolygons(stroke = FALSE, fillOpacity = 0.1, smoothFactor = 0.5) %>%
+  addTiles()
+#adds a map tile, the default is OpenStreetMap
+```
+### What is the average MSR of each district based on SMR ? 
+```{r}
+avg.SMR.by.district <- data_full %>%
+  group_by(District) %>%
+  dplyr::summarise(avg.SMR = mean(SMR)) 
+sab@data$MSR <- avg.SMR.by.district$avg.SMR
+require(RColorBrewer)
+qpal<-colorQuantile("Greens", avg.SMR.by.district$avg.SMR, n=9) 
+leaflet(sab) %>%
+    setView(lng =117, lat = 6, zoom = 7) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .5, smoothFactor = 0., color = ~qpal(avg.SMR.by.district$avg.SMR)
+  ) %>%
+  addTiles()
+#data_full <- merge(data_full, sum_data, "District")
+```
+
+
+### What is the average log MSR of each district based on SMR ? 
+```{r}
+avg.log.SMR.by.district <- data_full %>%
+  group_by(District) %>%
+  dplyr::summarise(avg.log.SMR = mean(log.SMR.total_area.ratio)) 
+sab@data$log.MSR <- avg.log.SMR.by.district$avg.log.SMR
+require(RColorBrewer)
+qpal<-colorQuantile("Greens", avg.log.SMR.by.district$avg.log.SMR, n=9) 
+leaflet(sab) %>%
+    setView(lng =117, lat = 6, zoom = 7) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .5, smoothFactor = 0., color = ~qpal(avg.log.SMR.by.district$avg.log.SMR)
+  ) %>%
+  addTiles()
+#data_full <- merge(data_full, sum_data, "District")
+```
+
+
+### What is the average MSR of each district based on SMR_d ? 
+```{r}
+avg.SMR.by.district2 <-  data_full %>%
+  group_by(District) %>%
+dplyr::summarise(avg.SMR = mean(SMR_d))
+sab@data$MSR_d <- avg.SMR.by.district2$avg.SMR
+require(RColorBrewer)
+qpal<-colorQuantile("Greens", avg.SMR.by.district2$avg.SMR, n=9) 
+leaflet(sab) %>%
+  setView(lng =117, lat = 6, zoom = 7) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .5, smoothFactor = 0., color = ~qpal(avg.SMR.by.district2$avg.SMR)
+  ) %>%
+  addTiles()
+```
+
+### What is the average percentage of crop rainfed in each district? 
+```{r}
+avg.crop.by.district <-  data_full %>%
+  group_by(District) %>%
+dplyr::summarise(avg.crop.rain = mean(CropRainfed.total.area))
+require(RColorBrewer)
+qpal<-colorQuantile("Greens", avg.crop.by.district$avg.crop.rain, n=9) 
+leaflet(sab) %>%
+  setView(lng =117, lat = 6, zoom = 7) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .5, smoothFactor = 0., color = ~qpal(avg.crop.by.district$avg.crop.rain)
+  ) %>%
+  addTiles()
+```
+
+
+### Plot of matrix of spatial correlation used for spatial econometric analysis
+```{r}
+# run spNeighbors
+source("spNeighbors.R")
+#plot spatial correlation matrix
+plot(ngb, coords)
+```
+
+
+### How correlated are the land cover areas? 
+```{r}
+data_sub_prop <- subset(data_full, select = c("BroadEvgClop.prop","CropRainfed.prop", "Herbaceous.prop", "Shrub.prop", "Urban.prop", "TreeShrub.prop", "MosCrop.prop", "MosNatural.prop", "SparseVeg.prop", "FloodFresh.prop", "FloodSalt.prop", "Water.prop", "CropIrrigate.prop"))
+library("Hmisc")
+res_prop <- rcorr(as.matrix(data_sub_prop))
+library(corrplot)
+corrplot(res_prop$r, type = "lower", order = "hclust", 
+        p.mat = res_prop$P, sig.level = 0.01, insig = "blank", tl.col = "black")
+```
+
+```{r}
+library("PerformanceAnalytics")
+chart.Correlation(data_sub_prop, histogram=TRUE, pch=19)
+col<- colorRampPalette(c("blue", "white", "red"))(20)
+heatmap(x = res_prop$r, col = col, symm = TRUE)
+```
+
+
+    - Variables highly correlated:
+        - CropRainfed.prop and Urban.prop
+        - CropRainfed.prop and Herbaceous.prop
+        - Urban.prop and Herbaceous.prop
+        - BroadEvgClop.prop and MosCrop.prop
+  
+```{r} 
+data_total.area <- subset(data_full, select = c("BroadEvgClop.total.area", "CropRainfed.total.area", "Herbaceous.total.area", "Shrub.total.area", "Urban.total.area", "TreeShrub.total.area", "MosCrop.total.area", "MosNatural.total.area", "SparseVeg.total.area", "FloodFresh.total.area", "FloodSalt.total.area", "Water.total.area", "CropIrrigate.total.area"))
+library("Hmisc")
+res_sub <- rcorr(as.matrix(data_total.area))
+library(corrplot)
+corrplot(res_sub$r, type = "lower", order = "hclust", 
+        p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.6, cl.cex=0.5)
+```
+  
+
+  
+  
+  ### How correlated are all data? 
+```{r}
+data_sub_all <- subset(data_full, select = c("SMR", "BroadEvgClop.total.area", "CropRainfed.total.area", "Herbaceous.total.area", "Shrub.total.area", "Urban.total.area", "TreeShrub.total.area", "MosCrop.total.area", "MosNatural.total.area", "SparseVeg.total.area", "FloodFresh.total.area", "FloodSalt.total.area", "Water.total.area", "CropIrrigate.total.area", "BroadEvgClop.n.patches", "CropRainfed.n.patches", "Herbaceous.n.patches", "Shrub.n.patches", "Urban.n.patches", "TreeShrub.n.patches", "MosCrop.n.patches", "MosNatural.n.patches", "SparseVeg.n.patches", "FloodFresh.n.patches", "FloodSalt.n.patches", "Water.n.patches", "CropIrrigate.n.patches", "BroadEvgClop.patch.density","CropRainfed.patch.density", "Herbaceous.patch.density", "Shrub.patch.density", "Urban.patch.density", "TreeShrub.patch.density", "MosCrop.patch.density", "MosNatural.patch.density", "SparseVeg.patch.density", "FloodFresh.patch.density", "FloodSalt.patch.density", "Water.patch.density", "CropIrrigate.patch.density", "prec_mean"))
+library("Hmisc")
+res_sub <- rcorr(as.matrix(data_sub_all))
+library(corrplot)
+corrplot(res_sub$r, type = "lower", order = "hclust", 
+        p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
+```      
+        
+### How correlated are the land covers patches? 
+```{r}
+data_sub_patches <- subset(data_full, select = c("BroadEvgClop.n.patches", "CropRainfed.n.patches", "Herbaceous.n.patches", "Shrub.n.patches", "Urban.n.patches", "TreeShrub.n.patches", "MosCrop.n.patches", "MosNatural.n.patches", "SparseVeg.n.patches", "FloodFresh.n.patches", "FloodSalt.n.patches", "Water.n.patches", "CropIrrigate.n.patches"))
+library("Hmisc")
+res_patches <- rcorr(as.matrix(data_sub_patches))
+library(corrplot)
+corrplot(res_patches$r, type = "lower", order = "hclust", 
+        p.mat = res_patches$P, sig.level = 0.01, insig = "blank", tl.col = "black")
+```
+
+```{r}
+library("PerformanceAnalytics")
+chart.Correlation(data_sub_patches, histogram=TRUE, pch=19)
+# Get some colors
+col<- colorRampPalette(c("blue", "white", "red"))(20)
+heatmap(x = res_patches$r, col = col, symm = TRUE)
+```
+
+
+ - Variable highly correlated:
+      - MosNatural.n.patches and MosCrop.n.patches
+      - MosNatural.n.patches and BroadEvgClop.n.patches
+      - FloodSalt.n.patches and Water.n.patches
+      - FloodFresh.n.patches and MosNatural.n.patches
+      
+
+### How much districts and years affect SMR? 
+```{r, echo=FALSE}
+ols.districts <- lm(SMR ~ factor(District) 
+    , data=data_full)
+#summary(ols.districts)
+ols.years <- lm(SMR ~ factor(Year) 
+    , data=data_full)
+#summary(ols.years)
+library(coefplot)
+coefplot1 <- coefplot(ols.districts, parm = -1)
+coefplot2 <- coefplot(ols.years, parm = -1)
+grid.arrange(coefplot1, coefplot2, ncol=2)
+```
+
+
+### How much districts and years affect SMR_d? 
+```{r, echo=FALSE}
+ols.districts_d <- lm(SMR_d ~ factor(District) 
+    , data=data_full)
+#summary(ols.districts)
+ols.years_d <- lm(SMR_d ~ factor(Year) 
+    , data=data_full)
+#summary(ols.years)
+library(coefplot)
+coefplot3 <- coefplot(ols.districts_d, parm = -1)
+coefplot4 <- coefplot(ols.years_d, parm = -1)
+grid.arrange(coefplot3, coefplot4, ncol=2)
+```
+
+
+### How much districts and years affect log.SMR? 
+```{r, echo=FALSE}
+ols.districts.log.SMR <- lm(log.SMR.total_area.ratio ~ factor(District) 
+    , data=data_full)
+#summary(ols.districts)
+ols.years.log.SMR <- lm(log.SMR.total_area.ratio ~ factor(Year) 
+    , data=data_full)
+#summary(ols.years)
+library(coefplot)
+coefplot3 <- coefplot(ols.districts.log.SMR, parm = -1)
+coefplot4 <- coefplot(ols.years.log.SMR, parm = -1)
+grid.arrange(coefplot3, coefplot4, ncol=2)
+```
+
+### What is the impact of areas in SMR? 
+```{r}
+ols.areas <- lm(SMR ~ 
+            CropRainfed.total.area +
+            Herbaceous.total.area +
+            TreeShrub.total.area +
+            CropIrrigate.total.area + 
+            MosCrop.total.area + 
+            MosNatural.total.area + 
+            BroadEvgClop.total.area + 
+            Shrub.total.area + 
+            ShrubEvg.total.area + 
+            SparseVeg.total.area +
+            FloodFresh.total.area + 
+            FloodFresh.total.area +
+            Urban.total.area + 
+            Water.total.area,
+                  data = data_full)
+#summary(ols.areas)
+require(coefplot)
+coefplot(ols.areas, parm = -1)
+```
+
+### What is the impact of the number of patches in SMR? 
+```{r}
+ols.patches <- lm(SMR ~ 
+            CropRainfed.n.patches +
+            Herbaceous.n.patches +
+            TreeShrub.n.patches +
+            CropIrrigate.n.patches +
+            MosCrop.n.patches +
+            MosNatural.n.patches +
+            BroadEvgClop.n.patches +
+            Shrub.n.patches +
+            ShrubEvg.n.patches +
+            SparseVeg.n.patches +
+            FloodFresh.n.patches +
+            FloodFresh.n.patches +
+              Urban.n.patches +
+            Water.n.patches,
+                  data = data_full)
+#summary(ols.patches)
+require(coefplot)
+coefplot(ols.patches, parm = -1)
+```
+
+
+### What is the impact of the patches density in SMR? 
+```{r}
+ols.patch.density <- lm(SMR ~ 
+            CropRainfed.patch.density +
+            Herbaceous.patch.density +
+            TreeShrub.patch.density +
+            CropIrrigate.patch.density +
+            MosCrop.patch.density +
+            MosNatural.patch.density +
+            #BroadEvgClop.patch.density +
+            Shrub.patch.density +
+            ShrubEvg.patch.density +
+            SparseVeg.patch.density +
+            FloodFresh.patch.density +
+            FloodFresh.patch.density +
+              Urban.patch.density +
+            Water.patch.density,
+                  data = data_full)
+summary(ols.patch.density)
+require(coefplot)
+coefplot(ols.patch.density, parm = -1)
+```
+
+### What is the effect from areas on SMR?
+```{r}
+#Define set of variables
+areas <- subset(data_full, select = c("BroadEvgClop.total.area", "CropRainfed.total.area", "Herbaceous.total.area", "Shrub.total.area", "Urban.total.area", "TreeShrub.total.area", "MosCrop.total.area", "MosNatural.total.area", "SparseVeg.total.area", "FloodFresh.total.area", "FloodSalt.total.area", "Water.total.area", "CropIrrigate.total.area"))
+props <- subset(data_full, select = c("BroadEvgClop.prop","CropRainfed.prop", "Herbaceous.prop", "Shrub.prop", "Urban.prop", "TreeShrub.prop", "MosCrop.prop", "MosNatural.prop", "SparseVeg.prop", "FloodFresh.prop", "FloodSalt.prop", "Water.prop", "CropIrrigate.prop"))
+patches <- subset(data_full, select = c("BroadEvgClop.n.patches", "CropRainfed.n.patches", "Herbaceous.n.patches", "Shrub.n.patches", "Urban.n.patches", "TreeShrub.n.patches", "MosCrop.n.patches", "MosNatural.n.patches", "SparseVeg.n.patches", "FloodFresh.n.patches", "FloodSalt.n.patches", "Water.n.patches", "CropIrrigate.n.patches"))
+```
+
+### OLS estimator for SMR
+```{r}
+ols.SMR <- glm(SMR ~ CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches +
+               CropIrrigate.prop*CropIrrigate.n.patches +
+                prec_mean +factor(District) + factor(Year)
+                , data= as.data.frame(data_full), family = "gaussian")
+summary(ols.SMR)
+yhat.ols.SMR <- ols.SMR$fitted.values
+plot(ols.SMR)
+#require(coefplot)
+#coefplot(fixed.effects, predictors="color")
+# Save coefficients in CSV file
+#write.csv(as.data.frame(summary(ols.SMR)$coef), file="ols.SMR.csv")
+```
+
+
+
+### OLS estimator for SMR using total areas
+```{r}
+ols.total.area.SMR <- glm(SMR ~  CropRainfed.total.area*CropRainfed.n.patches  +
+               Herbaceous.total.area*Herbaceous.n.patches  +
+               Shrub.total.area*Shrub.n.patches   +
+               Urban.total.area*Urban.n.patches +
+               TreeShrub.total.area*TreeShrub.n.patches +
+               MosCrop.total.area*MosCrop.n.patches +
+               MosNatural.total.area*MosNatural.n.patches +
+               SparseVeg.total.area*SparseVeg.n.patches +
+               FloodFresh.total.area*FloodFresh.n.patches +
+               FloodSalt.total.area*FloodSalt.n.patches +
+               Water.total.area*Water.n.patches +
+               CropIrrigate.total.area*CropIrrigate.n.patches +
+                 CropRainfed.patch.density +
+                 Shrub.patch.density +
+                 Urban.patch.density +
+                 TreeShrub.patch.density +
+                 MosCrop.patch.density +
+                 MosNatural.patch.density +
+                 SparseVeg.patch.density +
+                 FloodFresh.patch.density +
+                 FloodSalt.patch.density +
+                 Water.patch.density +
+                 CropIrrigate.patch.density +
+                 factor(District) + factor(Year)
+                , data= as.data.frame(data_full), family = "gaussian")
+summary(ols.total.area.SMR)
+yhat.ols.total.area.SMR <- ols.total.area.SMR$fitted.values
+#plot(ols.total.area.SMR)
+#require(coefplot)
+#coefplot(ols.total.area.SMR, predictors="color")
+# Save coefficients in CSV file
+#write.csv(as.data.frame(summary(ols.total.area.SMR)$coef), file="ols.total.area.SMR.csv")
+```
+
+
+### Plot of how the estimated coefficients change with interaction term (number of patches)
+https://cran.r-project.org/web/packages/interplot/vignettes/interplot-vignette.html
+
+```{r}
+library(interplot)
+plot_treeshrub <- interplot(m = ols.SMR, var1 = "TreeShrub.n.patches", var2 = "TreeShrub.n.prop", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("TreeShrub.n.patches") +
+    ylab("Estimated Coefficient for TreeShrub.prop") + 
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("Estimated Coefficient of TreeShrub.prop by TreeShrub.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+plot_moscrop <- interplot(m = ols.SMR, var1 = "MosNatural.prop", var2 = "MosNatural.n.patches", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("MosNatural.n.patches") +
+    ylab("Estimated Coefficient for MosNatural.prop")  +
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("Estimated Coefficient of MosNatural.prop by MosNatural.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+plot_floodfresh <- interplot(m = ols.SMR, var1 = "FloodFresh.prop", var2 = "FloodFresh.n.patches", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("FloodFresh.n.patches") +
+    ylab("Estimated Coefficient for FloodFresh.prop")  +
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("FloodFresh.prop by FloodFresh.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+grid.arrange(plot_treeshrub, plot_moscrop, plot_floodfresh, ncol=3)
+```
+
+### Calculate and plot the margins 
+https://github.com/leeper/margins
+https://cran.r-project.org/web/packages/margins/vignettes/Introduction.html#an_introduction_to_‘margins’
+https://cran.r-project.org/web/packages/ggeffects/vignettes/marginaleffects.html
+```{r}
+library("margins")
+m <- margins(ols.SMR, at = list( Mos = fivenum(data_full@MosNatural.n.patches)))
+plot(m)
+cplot(ols.SMR, "BroadEvgClop.prop", what = "effect", main = "Predicted forest margin")
+library("microbenchmark")
+microbenchmark(marginal_effects(ols.SMR))
+library(mfx)
+```
+
+### Marginal effects at the mean of patches and props
+```{r}
+library(ggeffects)
+library(ggplot2)
+library(sjmisc)
+library(gridExtra)
+theme_set(theme_bw())
+# Marginal effects at the mean for props
+predict.CropRainfed.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("CropRainfed.prop"), type ="fe")
+Plot.predict.CropRainfed.prop.ols.SMR <-  plot(predict.CropRainfed.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Herbaceous.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("Herbaceous.prop"), type ="fe")
+Plot.predict.Herbaceous.prop.ols.SMR <-  plot(predict.Herbaceous.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Shrub.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("Shrub.prop"), type ="fe")
+Plot.predict.Shrub.prop.ols.SMR <-  plot(predict.Shrub.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.FloodSalt.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("FloodSalt.prop"), type ="fe")
+Plot.predict.FloodSalt.prop.ols.SMR <-  plot(predict.FloodSalt.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Urban.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("Urban.prop"), type ="fe")
+Plot.predict.Urban.prop.ols.SMR <-  plot(predict.Urban.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.TreeShrub.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("TreeShrub.prop"), type ="fe")
+Plot.predict.TreeShrub.prop.ols.SMR <-  plot(predict.TreeShrub.prop.ols.SMR, facet = FALSE,rawdata = TRUE, ci = TRUE)
+predict.MosCrop.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("MosCrop.prop"), type ="fe")
+Plot.predict.MosCrop.prop.ols.SMR  <- plot(predict.MosCrop.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.MosNatural.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("MosNatural.prop"), type ="fe")
+Plot.predict.MosNatural.prop.ols.SMR  <- plot(predict.MosNatural.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.SparseVeg.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("SparseVeg.prop"), type ="fe")
+Plot.predict.SparseVeg.prop.ols.SMR  <- plot(predict.SparseVeg.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.FloodFresh.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("FloodFresh.prop"), type ="fe")
+Plot.predict.FloodFresh.prop.ols.SMR <- plot(predict.FloodFresh.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Water.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("Water.prop"), type ="fe")
+Plot.predict.Water.prop.ols.SMR <- plot(predict.Water.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.CropIrrigate.prop.ols.SMR <- ggpredict(ols.SMR, terms = c("CropIrrigate.prop"), type ="fe")
+Plot.predict.CropIrrigate.prop.ols.SMR <- plot(predict.CropIrrigate.prop.ols.SMR, facet = FALSE, rawdata = TRUE, ci = TRUE)
+grid.arrange(Plot.predict.CropRainfed.prop.ols.SMR, Plot.predict.Herbaceous.prop.ols.SMR, Plot.predict.Shrub.prop.ols.SMR, Plot.predict.FloodSalt.prop.ols.SMR, Plot.predict.Urban.prop.ols.SMR, Plot.predict.TreeShrub.prop.ols.SMR, Plot.predict.MosCrop.prop.ols.SMR, Plot.predict.MosNatural.prop.ols.SMR, Plot.predict.SparseVeg.prop.ols.SMR, Plot.predict.FloodFresh.prop.ols.SMR, Plot.predict.Water.prop.ols.SMR, Plot.predict.CropIrrigate.prop.ols.SMR, ncol=4, nrow =3)
+#ggplot(predict.ols.SMR, aes(x, predicted)) + geom_smooth()
+```
+
+```{r}
+library(ggeffects)
+library(ggplot2)
+library(sjmisc)
+library(gridExtra)
+theme_set(theme_bw())
+predict.CropRainfed.ols.SMR <- ggpredict(ols.SMR, terms = c("CropRainfed.prop", "CropRainfed.n.patches [mean(data_full$CropRainfed.n.patches)]"))
+Plot.predict.CropRainfed.ols.SMR <-  plot(predict.CropRainfed.ols.SMR, facet = FALSE, ci = TRUE)
+predict.Herbaceous.ols.SMR <- ggpredict(ols.SMR, terms = c("Herbaceous.prop", "Herbaceous.n.patches [mean(data_full$Herbaceous.n.patches)]"))
+Plot.predict.Herbaceous.ols.SMR <-  plot(predict.Herbaceous.ols.SMR, facet = FALSE, ci = TRUE)
+predict.Shrub.ols.SMR <- ggpredict(ols.SMR, terms = c("Shrub.prop", "Shrub.n.patches [mean(data_full$Shrub.n.patches)]"))
+Plot.predict.Shrub.ols.SMR <-  plot(predict.Shrub.ols.SMR, facet = FALSE, ci = TRUE)
+predict.FloodSalt.ols.SMR <- ggpredict(ols.SMR, terms = c("FloodSalt.prop", "FloodSalt.n.patches [mean(data_full$FloodSalt.n.patches)]"))
+Plot.predict.FloodSalt.ols.SMR <-  plot(predict.FloodSalt.ols.SMR, facet = FALSE, ci = TRUE)
+predict.Urban.ols.SMR <- ggpredict(ols.SMR, terms = c("Urban.prop", "Urban.n.patches [mean(data_full$Urban.n.patches)]" ))
+Plot.predict.Urban.ols.SMR <-  plot(predict.Urban.ols.SMR, facet = FALSE, ci = TRUE)
+predict.TreeShrub.ols.SMR <- ggpredict(ols.SMR, terms = c("TreeShrub.prop", "TreeShrub.n.patches [mean(data_full$TreeShrub.n.patches)]"))
+Plot.predict.TreeShrub.ols.SMR <- plot(predict.TreeShrub.ols.SMR)
+predict.MosCrop.ols.SMR <- ggpredict(ols.SMR, terms = c("MosCrop.prop", "MosCrop.n.patches [mean(data_full$MosCrop.n.patches)]"))
+Plot.predict.MosCrop.ols.SMR  <- plot(predict.MosCrop.ols.SMR, facet = FALSE, ci = TRUE)
+predict.MosNatural.ols.SMR <- ggpredict(ols.SMR, terms = c("MosNatural.prop", "MosNatural.n.patches [mean(data_full$MosNatural.n.patches)]"))
+Plot.predict.MosNatural.ols.SMR <- plot(predict.MosNatural.ols.SMR, facet = FALSE, ci = TRUE)
+predict.SparseVeg.ols.SMR <- ggpredict(ols.SMR, terms = c("SparseVeg.prop"), "SparseVeg.n.patches [mean(data_full$SparseVeg.n.patches)]")
+Plot.predict.SparseVeg.ols.SMR  <- plot(predict.SparseVeg.ols.SMR, facet = FALSE, ci = TRUE)
+predict.FloodFresh.ols.SMR <- ggpredict(ols.SMR, terms = c("FloodFresh.prop", "FloodFresh.n.patches [mean(data_full$FloodFresh.n.patches)]"))
+Plot.predict.FloodFresh.ols.SMR <- plot(predict.FloodFresh.ols.SMR, facet = FALSE, ci = TRUE)
+predict.Water.ols.SMR <- ggpredict(ols.SMR, terms = c("Water.prop"), "Water.n.patches [mean(data_full$Water.n.patches)]")
+Plot.predict.Water.ols.SMR <- plot(predict.Water.ols.SMR, facet = FALSE, ci = TRUE)
+predict.CropIrrigate.ols.SMR <- ggpredict(ols.SMR, terms = c("CropIrrigate.prop"), "CropIrrigate.n.patches [mean(data_full$CropIrrigate.n.patches)]")
+Plot.predict.CropIrrigate.ols.SMR <- plot(predict.CropIrrigate.ols.SMR, facet = FALSE, ci = TRUE)
+grid.arrange(Plot.predict.CropRainfed.ols.SMR, Plot.predict.Herbaceous.ols.SMR, Plot.predict.Shrub.ols.SMR, Plot.predict.FloodSalt.ols.SMR, Plot.predict.Urban.ols.SMR,  Plot.predict.TreeShrub.ols.SMR, Plot.predict.MosCrop.ols.SMR, Plot.predict.MosNatural.ols.SMR, Plot.predict.SparseVeg.ols.SMR, Plot.predict.FloodFresh.ols.SMR, Plot.predict.Water.ols.SMR, Plot.predict.CropIrrigate.ols.SMR, ncol=4, nrow =3)
+```
+
+
+### Average marginal effects
+```{r}
+#Average marginal effect
+average.CropRainfed.ols.SMR <- ggaverage(ols.SMR, terms = c("CropRainfed.prop"))
+Plot.average.CropRainfed.ols.SMR <-  plot(average.CropRainfed.ols.SMR, facet = FALSE, ci = TRUE)
+average.Herbaceous.ols.SMR <- ggaverage(ols.SMR, terms = c("Herbaceous.prop"))
+Plot.average.Herbaceous.ols.SMR <-  plot(average.Herbaceous.ols.SMR, facet = FALSE, ci = TRUE)
+average.Shrub.ols.SMR <- ggaverage(ols.SMR, terms = c("Shrub.prop"))
+Plot.average.Shrub.ols.SMR <-  plot(average.Shrub.ols.SMR, facet = FALSE, ci = TRUE)
+average.FloodSalt.ols.SMR <- ggaverage(ols.SMR, terms = c("FloodSalt.prop"))
+Plot.average.FloodSalt.ols.SMR <-  plot(average.FloodSalt.ols.SMR, facet = FALSE, ci = TRUE)
+average.Urban.ols.SMR <- ggaverage(ols.SMR, terms = c("Urban.prop" ))
+Plot.average.Urban.ols.SMR <-  plot(average.Urban.ols.SMR, facet = FALSE,  ci = TRUE)
+average.TreeShrub.prop.ols.SMR <- ggaverage(ols.SMR, terms = "TreeShrub.prop")
+Plot.average.TreeShrub.prop.ols.SMR <- plot(average.TreeShrub.prop.ols.SMR, facet = FALSE, ci = TRUE)
+average.MosCrop.prop.ols.SMR <- ggaverage(ols.SMR, terms = "MosCrop.prop")
+Plot.average.MosCrop.prop.ols.SMR <- plot(average.MosCrop.prop.ols.SMR, facet = FALSE, ci = TRUE)
+average.MosNatural.prop.ols.SMR <- ggaverage(ols.SMR, terms = "MosNatural.prop")
+Plot.average.MosNatural.prop.ols.SMR <- plot(average.MosNatural.prop.ols.SMR, facet = FALSE, ci = TRUE)
+average.SparseVeg.ols.SMR <- ggaverage(ols.SMR, terms = c("SparseVeg.prop"))
+Plot.average.SparseVeg.ols.SMR  <- plot(average.SparseVeg.ols.SMR, facet = FALSE, ci = TRUE)
+average.FloodFresh.ols.SMR <- ggaverage(ols.SMR, terms = c("FloodFresh.prop"))
+Plot.average.FloodFresh.ols.SMR <- plot(average.FloodFresh.ols.SMR, facet = FALSE, ci = TRUE)
+average.Water.ols.SMR <- ggaverage(ols.SMR, terms = c("Water.prop"))
+Plot.average.Water.ols.SMR <- plot(average.Water.ols.SMR, facet = FALSE, ci = TRUE)
+average.CropIrrigate.ols.SMR <- ggaverage(ols.SMR, terms = c("CropIrrigate.prop"))
+Plot.average.CropIrrigate.ols.SMR <- plot(average.CropIrrigate.ols.SMR, facet = FALSE, ci = TRUE)
+grid.arrange(Plot.average.CropRainfed.ols.SMR, Plot.average.Herbaceous.ols.SMR , Plot.average.Shrub.ols.SMR, Plot.average.FloodSalt.ols.SMR, Plot.average.Urban.ols.SMR,  Plot.average.TreeShrub.prop.ols.SMR, Plot.average.MosCrop.prop.ols.SMR, Plot.average.MosNatural.prop.ols.SMR, Plot.average.SparseVeg.ols.SMR, Plot.average.FloodFresh.ols.SMR, Plot.average.Water.ols.SMR, Plot.average.CropIrrigate.ols.SMR, ncol=4, nrow =3)
+```
+
+
+### OLS estimator for SMR_d
+```{r}
+data_full2 <- data_full %>%
+  filter(SMR_d<8)
+ols.SMR_d <- lm(SMR_d ~ SMR + CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+                # BroadEvgClop.prop*BroadEvgClop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches +
+               CropIrrigate.prop*CropIrrigate.n.patches +
+                factor(District) + factor(Year)
+                , data=as.data.frame(data_full2))
+summary(ols.SMR_d)
+yhat.ols_d <- ols.SMR_d$fitted.values
+plot(ols.SMR_d)
+```
+
+
+```{r}
+library(ggeffects)
+library(ggplot2)
+library(sjmisc)
+library(gridExtra)
+theme_set(theme_bw())
+# Marginal effects at the mean for props
+predict.SMR.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("SMR"), type ="fe")
+Plot.predict.SMR.ols.SMRd <-  plot(predict.SMR.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.CropRainfed.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("CropRainfed.prop"), type ="fe")
+Plot.predict.CropRainfed.prop.ols.SMRd <-  plot(predict.CropRainfed.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Herbaceous.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("Herbaceous.prop"), type ="fe")
+Plot.predict.Herbaceous.prop.ols.SMRd <-  plot(predict.Herbaceous.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Shrub.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("Shrub.prop"), type ="fe")
+Plot.predict.Shrub.prop.ols.SMRd <-  plot(predict.Shrub.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.FloodSalt.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("FloodSalt.prop"), type ="fe")
+Plot.predict.FloodSalt.prop.ols.SMRd <-  plot(predict.FloodSalt.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Urban.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("Urban.prop"), type ="fe")
+Plot.predict.Urban.prop.ols.SMRd <-  plot(predict.Urban.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.TreeShrub.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("TreeShrub.prop"), type ="fe")
+Plot.predict.TreeShrub.prop.ols.SMRd <-  plot(predict.TreeShrub.prop.ols.SMRd, facet = FALSE,rawdata = TRUE, ci = TRUE)
+predict.MosCrop.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("MosCrop.prop"), type ="fe")
+Plot.predict.MosCrop.prop.ols.SMRd  <- plot(predict.MosCrop.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.MosNatural.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("MosNatural.prop"), type ="fe")
+Plot.predict.MosNatural.prop.ols.SMRd  <- plot(predict.MosNatural.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.SparseVeg.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("SparseVeg.prop"), type ="fe")
+Plot.predict.SparseVeg.prop.ols.SMRd  <- plot(predict.SparseVeg.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.FloodFresh.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("FloodFresh.prop"), type ="fe")
+Plot.predict.FloodFresh.prop.ols.SMRd <- plot(predict.FloodFresh.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.Water.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("Water.prop"), type ="fe")
+Plot.predict.Water.prop.ols.SMRd <- plot(predict.Water.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+predict.CropIrrigate.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("CropIrrigate.prop"), type ="fe")
+Plot.predict.CropIrrigate.prop.ols.SMRd <- plot(predict.CropIrrigate.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+#predict.BroadEvgClop.prop.ols.SMRd <- ggpredict(ols.SMR_d, terms = c("BroadEvgClop.prop"), type ="fe")
+#Plot.predict.BroadEvgClop.prop.ols.SMRd <- plot(predict.BroadEvgClop.prop.ols.SMRd, facet = FALSE, rawdata = TRUE, ci = TRUE)
+grid.arrange(Plot.predict.CropRainfed.prop.ols.SMRd, Plot.predict.Herbaceous.prop.ols.SMRd, Plot.predict.Shrub.prop.ols.SMRd, Plot.predict.FloodSalt.prop.ols.SMRd, Plot.predict.Urban.prop.ols.SMRd, Plot.predict.TreeShrub.prop.ols.SMRd, Plot.predict.MosCrop.prop.ols.SMRd, Plot.predict.MosNatural.prop.ols.SMRd, Plot.predict.SparseVeg.prop.ols.SMRd, Plot.predict.FloodFresh.prop.ols.SMRd, Plot.predict.Water.prop.ols.SMRd, Plot.predict.CropIrrigate.prop.ols.SMRd, ncol=4, nrow =3)
+```
+
+
+
+### Plot of how the estimated coefficients change with interaction term (number of patches)
+https://cran.r-project.org/web/packages/interplot/vignettes/interplot-vignette.html
+
+```{r}
+library(interplot)
+plot_treeshrub <- interplot(m = ols.SMR_d, var1 = "TreeShrub.prop", var2 = "TreeShrub.n.patches", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("TreeShrub.n.patches") +
+    ylab("Estimated Coefficient for TreeShrub.prop") + 
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("Estimated Coefficient of TreeShrub.prop by TreeShrub.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+plot_moscrop <- interplot(m = ols.SMR_d, var1 = "MosNatural.prop", var2 = "MosNatural.n.patches", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("MosNatural.n.patches") +
+    ylab("Estimated Coefficient for MosNatural.prop")  +
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("Estimated Coefficient of MosNatural.prop by MosNatural.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+plot_floodfresh <- interplot(m = ols.SMR_d, var1 = "FloodFresh.prop", var2 = "FloodFresh.n.patches", ci = .95, point = F, hist=TRUE) +
+# Add labels for X and Y axes
+    xlab("FloodFresh.n.patches") +
+    ylab("Estimated Coefficient for FloodFresh.prop")  +
+  # Change the background
+    theme_bw() +
+  # Add the title
+    #ggtitle("FloodFresh.prop by FloodFresh.n.patches") +
+    theme(plot.title = element_text(face="bold")) +
+  # Add a horizontal line at y = 0
+    geom_hline(yintercept = 0, linetype = "dashed")
+grid.arrange(plot_treeshrub, plot_moscrop, plot_floodfresh, ncol=3)
+```
+
+
+### Panel Data fixed effects for SMR
+```{r}
+require(plm)
+Panel.set <- plm.data(data_full, index = c("District", "Year"))
+panel.SMR <- plm(SMR ~ CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches +
+               CropIrrigate.prop*CropIrrigate.n.patches 
+                , data=Panel.set, index=c("District", "Year"), model="within", effect="twoways")
+summary(panel.SMR)
+#require(coefplot)
+#coefplot(panel.SMR, parm = -1)
+```
+
+
+### Panel data model with variables chosen with VIF
+```{r}
+require(plm)
+Panel.set <- plm.data(data_full, index = c("District", "Year"))
+panel.SMR <- plm(log_SMR ~ prec_mean +
+                   CropRainfed.total.area+
+                   BroadEvgClop.total.area+ 
+                   Shrub.total.area+
+                   SparseVeg.total.area+
+                   Urban.total.area+
+                   #TreeShrub.patch.density+
+                   Grass.total.area, 
+                  # ShrubEvg.patch.density
+                , data=Panel.set, index=c("District", "Year"), model="within", effect="twoways")
+summary(panel.SMR)
+#require(coefplot)
+#coefplot(panel.SMR, parm = -1)
+log_SMR <- log(data_full$SMR+100)
+hist(log_SMR)
+```
+
+
+### Panel data fixed effects for SMR_d
+```{r}
+panel.SMR_d <- plm(SMR ~ CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches +
+               CropIrrigate.prop*CropIrrigate.n.patches + prec_mean,
+                , data=data_full, index=c("District", "Year"), model="within")
+summary(panel.SMR_d)
+#require(coefplot)
+#coefplot(panel.SMR_d, parm = -1)
+```
+
+
+### Spatial Panel estimation for SMR 
+```{r}
+#source("spWeights.R")
+Panel.set <- plm.data(data_full.for.spatial, index = c("District", "Year"))
+spatial.SMR <- spml(SMR ~ CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches + 
+               CropIrrigate.prop*CropIrrigate.n.patches
+                , data=Panel.set, index=c("District", "Year"), listw = idw.mat, model="within")
+summary(spatial.SMR)
+#require(coefplot)
+#coefplot(spatial.SMR, parm = -1)
+```
+
+### Spatial Panel estimation for SMR_d
+```{r}
+#source("spWeights.R")
+spatial.SMR_d <- spml(SMR_d ~ CropRainfed.prop*CropRainfed.n.patches  +
+               Herbaceous.prop*Herbaceous.n.patches  +
+               Shrub.prop*Shrub.n.patches   +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Urban.prop*Urban.n.patches +
+               TreeShrub.prop*TreeShrub.n.patches +
+               MosCrop.prop*MosCrop.n.patches +
+               MosNatural.prop*MosNatural.n.patches +
+               SparseVeg.prop*SparseVeg.n.patches +
+               FloodFresh.prop*FloodFresh.n.patches +
+               FloodSalt.prop*FloodSalt.n.patches +
+               Water.prop*Water.n.patches +
+               CropIrrigate.prop*CropIrrigate.n.patches
+                , data=data_full, index=c("District", "Year"), listw = idw.mat, model="within")
+summary(spatial.SMR_d)
+#require(coefplot)
+#coefplot(spatial.SMR, parm = -1)
+```
+
+### Effect on SMR from forest
+```{r}
+yhat.panel.SMR<- panel.SMR
+yhat.panel.SMR_d<- panel.SMR_d$fitted
+yhat.spatial.SMR<- spatial.SMR$fitted
+yhat.spatial.SMR_d<- spatial.SMR_d$fitted
+require(car)
+#scatterplot(yhat.ols~ yhat.ols_d, boxplots=FALSE, xlab="yhat.panel.SMR", ylab="yhat.panel.SMR_d",smooth=FALSE)
+scatterplot(yhat.ols ~ data_full$BroadEvgClop.prop, boxplots=FALSE, xlab="Forest (%)", ylab="Predicted SMR",smooth=TRUE)
+```
+
+
+```{r}
+library(Matrix)
+library(lfe)
+m1 <- felm(SMR ~ BroadEvgClop.n.patches | District + Year, data=data_full, contrasts=c('District', 'Year'))
+summary(m1)
+m1.sse <- t(residuals(m1)) %*% residuals(m1)
+X <- data_full[,c('SMR', 'BroadEvgClop.n.patches')]
+yfit <- m1$fitted.values
+qqnorm(residuals(m1), ylab='Residuals')
+qqline(residuals(m1))
+hist(residuals(m1), xlab='Residuals')
+plot(yfit, residuals(m1))
+```
+
+### Checking for Influential Observations
+```{r}
+require(faraway)
+X <- data_full[,c('SMR', 'BroadEvgClop.n.patches')]
+X <- as.matrix(X)
+P = X %*% solve(t(X) %*% X) %*% t(X)
+halfnorm(diag(P), labs=row.names(X), ylab='Leverages', nlab=1)
+# Remove influential obs
+data_full.mod <- subset(data_full,
+  !(District %in% data_full[names(diag(P)[diag(P) > 0.01]), 'District']))
+```
+
+
+###Checking for Spatial Autocorrelation
+```{r}
+plot(data_full$BroadEvgClop.n.patches, residuals(m1),
+  xlab='Forest', ylab='Residuals', main='Residuals vs. Forest')
+abline(h=0, col='red', lty='dashed')
+```
+
+ * Some useful sources:
+
+    - http://www.econ.uiuc.edu/~lab/workshop/Spatial_in_R.html#running-spatial-regressions
+    - https://cran.r-project.org/web/packages/spdep/vignettes/nb_igraph.html
+    - https://aledemogr.wordpress.com/2015/10/09/creating-neighborhood-matrices-for-spatial-polygons/
+    - https://www.princeton.edu/~otorres/Panel101R.pdf
+    - https://www.r-bloggers.com/an-introduction-to-spatial-econometrics-in-r/
+    - https://stats.stackexchange.com/questions/183601/interpreting-proportions-that-sum-to-one-as-independent-variables-in-linear-regr
+
+Create tables in latex format for paper
+```{r}
+stargazer(plm.SMR,plm.SMR2, title="Regression Results", no.space=TRUE, single.row=TRUE)
+```
+
+```{r SMRA analysis }
+SRMA.glm <- glm(SMRA ~ 
+              BroadEvgClop.prop*BroadEvgClop.n.patches  +
+              prec_mean +
+              factor(District) + 
+              factor(Year)
+            , data= as.data.frame(data_full), family = "gaussian")
+summary(SRMA.glm)
+SMRA.plm <- plm(SMRA ~
+              BroadEvgClop.prop*BroadEvgClop.n.patches  +
+              prec_mean 
+            , data= as.data.frame(data_full), model = "within", effect = "twoways")
+summary(SMRA.plm)
+```

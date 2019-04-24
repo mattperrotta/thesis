@@ -1,0 +1,210 @@
+---
+title: "Analysis"
+author: "Matthew Perrotta"
+date: "April 20, 2019"
+output: html_document
+---
+
+Data analysis for MPH Epidemiology thesis requirement.
+
+Research Question: What is the best predictor of standardized malaria rate (SMR) in the Malaysian regions of Sarawak and Sabah.
+
+Methods:
+-Exploratory data analysis and visualizations
+-multiple linear regression
+-more advanced linear regression methods
+-GAM
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+```{r echo = T, message = FALSE, results='hide', warning=FALSE}
+library(tidyverse)
+library(mgcv)
+library(corrplot)
+library(Hmisc)
+```
+
+### Import and clean data
+```{r}
+swk = read.csv('./data/data_full_sar.csv') %>% 
+  group_by(district, year) %>% 
+  mutate(district_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area 
+         ) %>% 
+  ungroup() %>% 
+  group_by(district) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
+         Herbaceous.prop = Herbaceous.total.area/district_area,
+         TreeShrub.prop = TreeShrub.total.area/district_area,
+         MosCrop.prop = MosCrop.total.area/district_area,
+         MosNatural.prop = MosNatural.total.area/district_area,
+         BroadEvgClop.prop = BroadEvgClop.total.area/district_area,
+         Shrub.prop = Shrub.total.area/district_area,
+         ShrubEvg.prop = ShrubEvg.total.area/district_area,
+         SparseVeg.prop = SparseVeg.total.area/district_area,
+         FloodFresh.prop = FloodFresh.total.area/district_area,
+         FloodSalt.prop = FloodSalt.total.area/district_area,
+         Urban.prop = Urban.total.area/district_area,
+         Water.prop = Water.total.area/district_area,
+         CropIrrigate.prop = CropIrrigate.total.area/district_area) %>% 
+  janitor::clean_names() %>%
+  ungroup() %>%  
+  select(-c('x',
+            'population_year',
+            'cases_year',
+            'expected',
+            'sd')) %>% 
+  rename('smr' = 'sir',
+         'prec_mean' = 'mean',
+         'cases' = 'case_number')
+
+sbh = read.csv('./data/dataFull.csv') %>% 
+  group_by(District, Year) %>% 
+  mutate(district_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area +
+           Grass.total.area +
+           MosTreeHerb.total.area
+         ) %>% 
+  ungroup() %>% 
+  group_by(District) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
+         Herbaceous.prop = Herbaceous.total.area/district_area,
+         TreeShrub.prop = TreeShrub.total.area/district_area,
+         MosCrop.prop = MosCrop.total.area/district_area,
+         MosNatural.prop = MosNatural.total.area/district_area,
+         BroadEvgClop.prop = BroadEvgClop.total.area/district_area,
+         Shrub.prop = Shrub.total.area/district_area,
+         ShrubEvg.prop = ShrubEvg.total.area/district_area,
+         SparseVeg.prop = SparseVeg.total.area/district_area,
+         FloodFresh.prop = FloodFresh.total.area/district_area,
+         FloodSalt.prop = FloodSalt.total.area/district_area,
+         Urban.prop = Urban.total.area/district_area,
+         Water.prop = Water.total.area/district_area,
+         CropIrrigate.prop = CropIrrigate.total.area/district_area,
+         Grass.prop = Grass.total.area/district_area,
+         MosTreeHerb.prop = MosTreeHerb.total.area/district_area) %>% 
+  janitor::clean_names() %>%
+  ungroup() %>%
+  select(-c('x', 
+            'disease', 
+            'number_deaths', 
+            'mortality_rates',
+            'prevalence',
+            'incidence_rate')) %>% 
+  rename('cases' = 'number_cases')
+```
+The Sarawak dataset does not have the following variables: 
+grass_n_patches
+grass_patch_density
+grass_total_area
+grass_prop
+mos_tree_herb_n_patches
+mos_tree_herb_patch_density
+mos_tree_herb_total_area
+mos_tree_herb_prop
+
+I will remove these variables
+```{r}
+sbh = sbh %>% 
+  select(-c('grass_n_patches', 
+            'grass_patch_density', 
+            'grass_total_area', 
+            'grass_prop', 
+            'mos_tree_herb_n_patches', 
+            'mos_tree_herb_patch_density', 
+            'mos_tree_herb_total_area', 
+            'mos_tree_herb_prop'))
+```
+
+
+
+### EDA and Visualization
+
+Looking at the distribution of the outcome (SMR) for both Sarawak and Sabah
+```{r warning=FALSE}
+ggplot(data = swk, aes(x = smr)) +  
+  geom_histogram() +
+  labs(title = 'SMR distribution, Sarawak')
+
+ggplot(data = sbh, aes(x = smr)) +  
+  geom_histogram() +
+  labs(title = 'SMR distribution, Sabah') 
+```
+Distribution seems to follow a poisson distribution. When running GAM, incorporate Poisson regression. Also, SMR by its nature of being a rate follows  poisson regression.
+
+
+Scatterplot of predictors vs. outcome
+```{r}
+swk %>% 
+  mutate(district = fct_reorder(district, smr)) %>% 
+  ggplot() +  
+  geom_point(aes(x = district,y = smr)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(data = swk) +
+  geom_point(aes(x = population, y = smr))
+
+ggplot(data = swk) +
+  geom_point(aes(x = prec_mean, y = smr))
+
+ggplot(data = swk) +
+  geom_point(aes(x = broad_evg_clop_total_area, y = smr)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+Correlation 
+```{r}
+sbh_sub = subset(sbh, select = c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "prec_mean"))
+
+res_sub <- rcorr(as.matrix(sbh_sub))
+
+corrplot(res_sub$r, type = "lower", 
+        p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex = 0.5)
+
+swk_sub = subset(swk, select = c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "prec_mean"))
+
+res_sub2 <- rcorr(as.matrix(swk_sub))
+
+corrplot(res_sub2$r, type = "lower", 
+        p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
+```
+
+
+GAM
+```{r}
+gam1 = gam(smr ~ s(prec_mean, by = year) + year, data = sbh, method = 'REML') 
+
+summary(gam1)
+plot(gam1)
+```
+
