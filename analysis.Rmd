@@ -28,6 +28,8 @@ library(Hmisc)
 library(caret)
 ```
 
+READ: https://www.nature.com/articles/s41598-017-02560-z
+
 ### Import and clean data
 ```{r}
 swk = read.csv('./data/data_full_sar.csv') %>% 
@@ -218,7 +220,7 @@ swk.y = swk_sub$smr
 Scatterplot of predictors vs. outcome
 ```{r}
 featurePlot(swk.x, 
-            log(swk.y), 
+            swk.y, 
             plot = "scatter", 
             labels = c("Predictors","SMR"),
             type = c('p'))
@@ -230,6 +232,12 @@ swk %>%
   mutate(district = fct_reorder(district, smr)) %>% 
   ggplot() +  
   geom_point(aes(x = district,y = smr)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+swk %>% 
+  #mutate(district = fct_reorder(year, smr)) %>% 
+  ggplot() +  
+  geom_boxplot(aes(x = year,y = smr)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ggplot(data = swk) +
@@ -302,7 +310,7 @@ summary(gam_sbh)
 ```
 
 ```{r}
-gam_sbh = bam(smr ~ 
+sbh_fit= glm(smr ~ 
                 broad_evg_clop_n_patches +
                 broad_evg_clop_patch_density +
                 broad_evg_clop_prop +
@@ -345,7 +353,9 @@ gam_sbh = bam(smr ~
                 prec_mean +
                 year +
                 district, 
-              data = swk, method = 'REML', family = poisson(link = log))
+              data = swk, family = poisson)
+
+
 ```
 
 Inspect model:
@@ -355,7 +365,7 @@ VIF/tolerance
 summary()
 coef()
 ```{r}
-summary(gam_sbh)
+summary(sbh_fit)
 gam.check(gam_sbh)
 ```
 
