@@ -29,7 +29,7 @@ library(caret)
 library(PerformanceAnalytics)
 library(car)
 library(olsrr)
-library(MASS)
+#library(MASS)
 ```
 
 READ: https://www.nature.com/articles/s41598-017-02560-z
@@ -54,6 +54,7 @@ swk = read.csv('./data/data_full_sar.csv') %>%
            Water.total.area +
            CropIrrigate.total.area 
          ) %>% 
+  mutate(pop_density = population/district_area) %>% 
   ungroup() %>% 
   group_by(district) %>%
   mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
@@ -80,7 +81,8 @@ swk = read.csv('./data/data_full_sar.csv') %>%
   rename('smr' = 'sir',
          'prec_mean' = 'mean',
          'cases' = 'case_number') %>% 
-  mutate(year = as.factor(year))
+  mutate(year = as.factor(year)) %>% 
+  na.omit()
 
 
 sbh = read.csv('./data/dataFull.csv') %>% 
@@ -102,7 +104,8 @@ sbh = read.csv('./data/dataFull.csv') %>%
            CropIrrigate.total.area +
            Grass.total.area +
            MosTreeHerb.total.area
-         ) %>% 
+         ) %>%
+  mutate(pop_density = population/district_area) %>% 
   ungroup() %>% 
   group_by(District) %>%
   mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
@@ -130,8 +133,10 @@ sbh = read.csv('./data/dataFull.csv') %>%
             'prevalence',
             'incidence_rate')) %>% 
   rename('cases' = 'number_cases') %>% 
-  mutate(year = as.factor(year))
+  mutate(year = as.factor(year)) %>% 
+  na.omit()
 ```
+Observations with `NA` values were omitted from the data set
 
 Land Cover variable discriptions:
 `crop_rainfed` - Cropland, rainfed
@@ -153,14 +158,18 @@ Land Cover variable discriptions:
 
 
 The Sarawak dataset does not have the following variables: 
-grass_n_patches
-grass_patch_density
-grass_total_area
-grass_prop
-mos_tree_herb_n_patches
-mos_tree_herb_patch_density
-mos_tree_herb_total_area
-mos_tree_herb_prop
+`grass_n_patches`
+`grass_patch_density`
+`grass_total_area`
+`grass_prop`
+`mos_tree_herb_n_patches`
+`mos_tree_herb_patch_density`
+`mos_tree_herb_total_area`
+`mos_tree_herb_prop`
+
+```{r}
+summary(sbh)
+```
 
 
 Correlation 
@@ -229,6 +238,34 @@ corrplot(res_lu2$r, type = "lower",
         p.mat = res_lu2$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
 ```
 
+
+```{r}
+sbh.x = model.matrix(smr~., sbh_sub, na.action = NULL)[,-1]
+sbh.y = sbh_sub$smr
+
+swk.x = model.matrix(smr~., swk_sub)[,-1]
+swk.y = swk_sub$smr
+```
+
+
+Scatterplot of predictors vs. outcome
+```{r}
+featurePlot(sbh.x, 
+            sbh.y, 
+            plot = "scatter", 
+            labels = c("Predictors","SMR"),
+            type = c('p'))
+
+featurePlot(swk.x, 
+            swk.y, 
+            plot = "scatter", 
+            labels = c("Predictors","SMR"),
+            type = c('p'))
+```
+
+
+### Checking for Multicolliearity with Tolerance and VIF
+
 ```{r}
 ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
            crop_rainfed_total_area + 
@@ -265,8 +302,8 @@ ols_vif_tol(lm(smr ~ broad_evg_clop_total_area +
            data = swk))
 ```
 
-
-I will create general cropland and forest variables to decrease the number of total variables and account for multicollinearity between many land use variables
+I will create general cropland variable to decrease the number of total variables and account for multicollinearity between many land use variables. This is based on the article "Comparison of Global Land Cover Datasets for
+Cropland Monitoring".
 
 ```{r}
 sbh = sbh %>% 
@@ -304,8 +341,18 @@ ols_vif_tol(lm(smr ~ broad_evg_clop_total_area +
            mos_tree_herb_total_area +
            grass_total_area, 
            data = sbh))
-```
 
+ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
+           shrub_total_area +
+           shrub_evg_total_area +
+           urban_total_area + 
+           agri_total_area + 
+           sparse_veg_total_area + 
+           flood_fresh_total_area + 
+           flood_salt_total_area + 
+           water_total_area, 
+           data = swk))
+```
 
 
 ### EDA and Visualization
@@ -322,74 +369,18 @@ ggplot(data = sbh, aes(x = smr)) +
 ```
 Distribution seems to follow a poisson distribution. When running GAM, incorporate Poisson regression. Also, SMR by its nature of being a rate follows  poisson regression.
 
-Checking variance and mean for both datasets
+### Fitting Poisson Regression Model for Sabah and Sarawak
+
+Sabah
 ```{r}
-labels = c('Region', 'Mean', 'Variance')
-Sabah = c(mean(sbh$smr, na.rm = T), var(sbh$smr, na.rm = T))
-Sarawak = c(mean(swk$smr, na.rm = T), var(swk$smr, na.rm = T))
-
-mean_and_variance = rbind(Sabah, Sarawak)
-```
-For both regions the mean and variance differ, indicating the need to use a negative binomal distribution instead of poisson.
-
-```{r}
-sbh.x = model.matrix(smr~., sbh_sub, na.action = NULL)[,-1]
-sbh.y = sbh_sub$smr
-
-swk.x = model.matrix(smr~., swk_sub)[,-1]
-swk.y = swk_sub$smr
-```
-
-
-Scatterplot of predictors vs. outcome
-```{r}
-featurePlot(sbh.x, 
-            sbh.y, 
-            plot = "scatter", 
-            labels = c("Predictors","SMR"),
-            type = c('p'))
-```
-
-
-```{r}
-swk %>% 
-  mutate(district = fct_reorder(district, smr)) %>% 
-  ggplot() +  
-  geom_point(aes(x = district,y = smr)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-swk %>% 
-  #mutate(district = fct_reorder(year, smr)) %>% 
-  ggplot() +  
-  geom_boxplot(aes(x = year,y = smr)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-ggplot(data = swk) +
-  geom_point(aes(x = prec_mean, y = log(smr)))
-
-ggplot(data = swk) +
-  geom_point(aes(x = broad_evg_clop_total_area, y = log(smr)))
-  
-  
-sbh.glm = glm(smr ~ urban_n_patches, data = sbh, family = poisson(link = log))
-summary(sbh.glm)
-plot(sbh.glm)
-```
-
-### Checking for Multicolliearity with Tolerance and VIF
-
-Fitting a multiple linear regression
-```{r}
-sbh.lm = lm(smr ~ 
+sbh.glm = glm(smr ~ 
                 broad_evg_clop_n_patches +
                 broad_evg_clop_patch_density +
                 broad_evg_clop_prop +
                 crop_irrigate_n_patches +
                 crop_irrigate_patch_density +
-                crop_irrigate_prop +
                 crop_rainfed_n_patches + 
                 crop_rainfed_patch_density +
-                crop_rainfed_prop +
                 flood_fresh_n_patches +
                 flood_fresh_patch_density +
                 flood_fresh_prop +
@@ -398,13 +389,10 @@ sbh.lm = lm(smr ~
                 flood_salt_prop +
                 herbaceous_n_patches +
                 herbaceous_patch_density +
-                herbaceous_prop +
                 mos_crop_n_patches +
                 mos_crop_patch_density +
-                mos_crop_prop +
                 mos_natural_n_patches +
                 mos_natural_patch_density +
-                mos_natural_prop +
                 shrub_n_patches +
                 shrub_patch_density +
                 shrub_prop +
@@ -416,7 +404,6 @@ sbh.lm = lm(smr ~
                 sparse_veg_prop +
                 tree_shrub_n_patches +
                 tree_shrub_patch_density + 
-                tree_shrub_prop +
                 grass_n_patches +
                 grass_patch_density +
                 grass_prop +
@@ -425,19 +412,32 @@ sbh.lm = lm(smr ~
                 urban_prop +
                 water_n_patches +
                 water_patch_density +
+                agri_prop +
                 water_prop +
+                pop_density +
                 prec_mean +
                 year +
                 district, 
-              data = sbh
-              ) 
+              data = sbh, family = poisson(link = log)
+              )
 
-vif(sbh.lm)
-ols_vif_tol(sbh.lm)
+summary(sbh.glm)
+plot(sbh.glm)
 ```
 
 
-### Fitting GAM for SABAH
+Checking variance and mean for both datasets
+```{r}
+labels = c('Region', 'Mean', 'Variance')
+Sabah = c(mean(sbh$smr, na.rm = T), var(sbh$smr, na.rm = T))
+Sarawak = c(mean(swk$smr, na.rm = T), var(swk$smr, na.rm = T))
+
+mean_and_variance = rbind(Sabah, Sarawak)
+```
+For both regions the mean and variance differ, indicating the need to use a negative binomal distribution instead of poisson.
+
+
+### Fitting GAM for Sabah and Sarawak
 
 Poisson models will be used as the outcome is SMR
 
@@ -469,10 +469,10 @@ plot(fit.prop)
 fit.prop.int = bam(smr ~ s(broad_evg_clop_prop) +
                   s(agri_prop, k = 5) +
                   s(mos_tree_herb_prop, k = 5) +
-                  s(grass_prop, k = 2) +
+                  s(grass_prop, k = 5) +
                   s(sparse_veg_prop, k = 2) +
                   s(shrub_prop) +
-                  s(shrub_evg_prop, k = 2) +
+                  s(shrub_evg_prop, k = 3) +
                   s(flood_fresh_prop) +
                   s(flood_salt_prop) +
                   s(urban_prop) +
@@ -571,4 +571,5 @@ coef()
 summary(sbh_fit)
 gam.check(gam_sbh)
 ```
+
 
