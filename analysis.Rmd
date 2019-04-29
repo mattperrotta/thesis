@@ -54,7 +54,8 @@ swk = read.csv('./data/data_full_sar.csv') %>%
            Water.total.area +
            CropIrrigate.total.area 
          ) %>% 
-  mutate(pop_density = population/district_area) %>% 
+  mutate(pop_density = population/district_area,
+         log_smr = log(SIR)) %>% 
   ungroup() %>% 
   group_by(district) %>%
   mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
@@ -105,7 +106,8 @@ sbh = read.csv('./data/dataFull.csv') %>%
            Grass.total.area +
            MosTreeHerb.total.area
          ) %>%
-  mutate(pop_density = population/district_area) %>% 
+  mutate(pop_density = population/district_area,
+         log_smr = log(SMR)) %>% 
   ungroup() %>% 
   group_by(District) %>%
   mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
@@ -357,23 +359,100 @@ ols_vif_tol(lm(smr ~ broad_evg_clop_total_area +
 
 ### EDA and Visualization
 
+```{r}
+summary(swk)
+summary(sbh)
+```
+
+
 Looking at the distribution of the outcome (SMR) for both Sarawak and Sabah
 ```{r warning=FALSE}
 ggplot(data = swk, aes(x = smr)) +  
-  geom_histogram() +
+  geom_density() +
   labs(title = 'SMR distribution, Sarawak')
 
 ggplot(data = sbh, aes(x = smr)) +  
-  geom_histogram() +
+  geom_density() +
   labs(title = 'SMR distribution, Sabah') 
 ```
 Distribution seems to follow a poisson distribution. When running GAM, incorporate Poisson regression. Also, SMR by its nature of being a rate follows  poisson regression.
 
+Mean precipitation across districts of Sabah and Sarawak
+```{r}
+ggplot(data = swk, aes(x = as.integer(year), y = prec_mean, color = district)) +  
+  geom_line() +
+  labs(title = 'Mean Precipitation, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = prec_mean, color = district)) +  
+  geom_line() +
+  labs(title = 'Mean Precipitation, Sabah')
+```
+
+Forest cover across districts, Sarawak and Sabah
+```{r}
+#Total area
+ggplot(data = swk, aes(x = as.integer(year), y = broad_evg_clop_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Forest Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = broad_evg_clop_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Forest Cover, Sabah')
+
+#Number of patches
+ggplot(data = swk, aes(x = as.integer(year), y = broad_evg_clop_n_patches, color = district)) +  
+  geom_line() +
+  labs(title = 'Number of Patches, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = broad_evg_clop_n_patches, color = district)) +  
+  geom_line() +
+  labs(title = 'Number of Patches, Sabah')
+
+#Patch density
+ggplot(data = swk, aes(x = as.integer(year), y = broad_evg_clop_patch_density, color = district)) +  
+  geom_line() +
+  labs(title = 'Patch Density, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = broad_evg_clop_patch_density, color = district)) +  
+  geom_line() +
+  labs(title = 'Patch Density, Sabah')
+
+#Patch density
+ggplot(data = swk, aes(x = as.integer(year), y = broad_evg_clop_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Forest Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = broad_evg_clop_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Forest Cover, Sabah')
+```
+
+Agricultural cover across districts, Sarawak and Sabah
+```{r}
+#Total area
+ggplot(data = swk, aes(x = as.integer(year), y = agri_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Agricultural Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = agri_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Agricultural Cover, Sabah')
+
+#Proportion
+ggplot(data = swk, aes(x = as.integer(year), y = agri_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Agricultural Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = as.integer(year), y = agri_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Agricultural Cover, Sabah')
+```
+
+
 ### Fitting Poisson Regression Model for Sabah and Sarawak
 
-Sabah
 ```{r}
-sbh.glm = glm(smr ~ 
+swk.p = glm(smr ~ 
                 broad_evg_clop_n_patches +
                 broad_evg_clop_patch_density +
                 broad_evg_clop_prop +
@@ -404,9 +483,6 @@ sbh.glm = glm(smr ~
                 sparse_veg_prop +
                 tree_shrub_n_patches +
                 tree_shrub_patch_density + 
-                grass_n_patches +
-                grass_patch_density +
-                grass_prop +
                 urban_n_patches +
                 urban_patch_density +
                 urban_prop +
@@ -415,14 +491,61 @@ sbh.glm = glm(smr ~
                 agri_prop +
                 water_prop +
                 pop_density +
-                prec_mean +
-                year +
-                district, 
-              data = sbh, family = poisson(link = log)
+                prec_mean,
+              data = swk, family = poisson(link = log)
               )
 
-summary(sbh.glm)
-plot(sbh.glm)
+summary(swk.p)
+plot(swk.p)
+```
+
+
+```{r}
+swk.lm = lm(smr ~ 
+                broad_evg_clop_n_patches +
+                broad_evg_clop_patch_density +
+                broad_evg_clop_prop +
+                crop_irrigate_n_patches +
+                crop_irrigate_patch_density +
+                crop_rainfed_n_patches + 
+                crop_rainfed_patch_density +
+                flood_fresh_n_patches +
+                flood_fresh_patch_density +
+                flood_fresh_prop +
+                flood_salt_n_patches +
+                flood_salt_patch_density +
+                flood_salt_prop +
+                herbaceous_n_patches +
+                herbaceous_patch_density +
+                mos_crop_n_patches +
+                mos_crop_patch_density +
+                mos_natural_n_patches +
+                mos_natural_patch_density +
+                shrub_n_patches +
+                shrub_patch_density +
+                shrub_prop +
+                shrub_evg_n_patches +
+                #shrub_evg_patch_density +
+                #shrub_evg_prop +
+                sparse_veg_n_patches +
+                sparse_veg_patch_density +
+                sparse_veg_prop +
+                tree_shrub_n_patches +
+                tree_shrub_patch_density + 
+                urban_n_patches +
+                urban_patch_density +
+                urban_prop +
+                water_n_patches +
+                water_patch_density +
+                agri_prop +
+                #water_prop +
+                pop_density +
+                prec_mean,
+              data = swk
+              )
+
+summary(swk.lm)
+plot(swk.lm)
 ```
 
 
@@ -439,126 +562,106 @@ For both regions the mean and variance differ, indicating the need to use a nega
 
 ### Fitting GAM for Sabah and Sarawak
 
-Poisson models will be used as the outcome is SMR
-
-GAM model, Land Cover Proportions
+Sarawak
 ```{r}
-fit.prop = bam(smr ~ s(broad_evg_clop_prop) +
-                  s(agri_prop, k = 5) +
-                  s(mos_tree_herb_prop, k = 5) +
-                  s(grass_prop, k = 3) +
-                  s(sparse_veg_prop, k = 3) +
-                  s(shrub_prop) +
-                  s(shrub_evg_prop, k = 3) +
-                  s(flood_fresh_prop) +
-                  s(flood_salt_prop) +
-                  s(urban_prop) +
-                  s(water_prop) +
-                  year +
-                  district,
-                data = sbh,
-                family = neg.bin(1)
-               )
+#library(MASS)
+#How do I run a time series using gam? From what I've seen I add interaction terms. I need to do time series with spatial considerations. How is this done?
+#Data does not allow for interactions... to many 
 
-summary(fit.prop)
-gam.check(fit.prop)
-plot(fit.prop)
+swk.fit = gam(smr ~ s(prec_mean) +
+                s(broad_evg_clop_prop) +
+                s(broad_evg_clop_n_patches) +
+                s(broad_evg_clop_patch_density) +
+                s(agri_prop) +
+                s(crop_irrigate_n_patches) +
+                s(crop_irrigate_patch_density) +
+                s(crop_rainfed_n_patches) +
+                s(crop_rainfed_patch_density) +
+                s(herbaceous_n_patches) +
+                s(herbaceous_patch_density) +
+                s(mos_crop_n_patches) +
+                s(mos_crop_patch_density) +
+                s(mos_natural_n_patches) +
+                s(mos_natural_patch_density) +
+                s(tree_shrub_n_patches) +
+                s(tree_shrub_patch_density)
+                  ,
+              data = swk)
+
+summary(swk.fit)
+gam.check(swk.fit)
+plot(swk.fit)
+
+                #flood_fresh_n_patches +
+                #flood_fresh_patch_density +
+                #flood_fresh_prop +
+                #flood_salt_n_patches +
+                #flood_salt_patch_density +
+                #flood_salt_prop +
+                #shrub_n_patches +
+                #shrub_patch_density +
+                #shrub_prop +
+                #shrub_evg_n_patches +
+                #shrub_evg_patch_density +
+                #shrub_evg_prop +
+                #sparse_veg_n_patches +
+                #sparse_veg_patch_density +
+                #sparse_veg_prop +
+                #grass_n_patches +
+                #grass_patch_density +
+                #grass_prop +
+                #urban_n_patches +
+                #urban_patch_density +
+                #urban_prop +
+                #water_n_patches +
+                #water_patch_density +
+                #water_prop +
+                #year +
+                #district
 ```
 
+Sabah
 ```{r}
-fit.prop.int = bam(smr ~ s(broad_evg_clop_prop) +
-                  s(agri_prop, k = 5) +
-                  s(mos_tree_herb_prop, k = 5) +
-                  s(grass_prop, k = 5) +
-                  s(sparse_veg_prop, k = 2) +
-                  s(shrub_prop) +
-                  s(shrub_evg_prop, k = 3) +
-                  s(flood_fresh_prop) +
-                  s(flood_salt_prop) +
-                  s(urban_prop) +
-                  s(water_prop) +
-                  #ti(broad_evg_clop_prop, by = district) +
-                  #ti(agri_prop, district) +
-                  #ti(mos_tree_herb_prop, district) +
-                  #ti(grass_prop, district) +
-                  #ti(sparse_veg_prop, district) +
-                  #ti(shrub_prop, district) +
-                  #ti(shrub_evg_prop, district) +
-                  #ti(flood_fresh_prop, district) +
-                  #ti(flood_salt_prop, district) +
-                  #ti(urban_prop, district) +
-                  #ti(water_prop, district) +
-                  year +
-                  district,
-                data = sbh,
-                family = poisson(link = log)
-               )
+sbh.fit = gam(smr ~ s(prec_mean) +
+                s(broad_evg_clop_prop) +
+                s(broad_evg_clop_n_patches) +
+                s(broad_evg_clop_patch_density) +
+                s(agri_prop) +
+                s(crop_irrigate_n_patches) +
+                s(crop_irrigate_patch_density) +
+                s(crop_rainfed_n_patches) +
+                s(crop_rainfed_patch_density) +
+                s(herbaceous_n_patches) +
+                s(herbaceous_patch_density) +
+                s(mos_crop_n_patches) +
+                s(mos_crop_patch_density) +
+                s(mos_natural_n_patches) +
+                s(mos_natural_patch_density) +
+                s(tree_shrub_n_patches) +
+                s(tree_shrub_patch_density)
+                  ,
+              data = sbh)
 
-summary(fit.prop.int)
-gam.check(fit.prop.int)
-plot(fit.prop.int)
+summary(sbh.fit)
+gam.check(sbh.fit)
+plot(sbh.fit)
 ```
 
 
-GAM, with Poisson
-
-Model takes too long to run, so I will be removing all `_n_patches` variables. These variables are accounted for 
 ```{r}
-sbh.fit2 = bam(smr ~ 
-                s(broad_evg_clop_n_patches, k = 5) +
-                s(broad_evg_clop_patch_density, k = 5) +
-                s(broad_evg_clop_prop, k = 5) +
-                s(crop_irrigate_n_patches, k = 5) +
-                s(crop_irrigate_patch_density, k = 5) +
-                s(crop_irrigate_prop, k = 5) +
-                s(crop_rainfed_n_patches, k = 5) + 
-                s(crop_rainfed_patch_density, k = 5) +
-                s(crop_rainfed_prop, k = 5) +
-                s(flood_fresh_n_patches, k = 5) +
-                s(flood_fresh_patch_density, k = 5) +
-                s(flood_fresh_prop, k = 5) +
-                s(flood_salt_n_patches, k = 5) +
-                s(flood_salt_patch_density, k = 5) +
-                s(flood_salt_prop, k = 5) +
-                s(herbaceous_n_patches, k = 5) +
-                s(herbaceous_patch_density, k = 5) +
-                s(herbaceous_prop, k = 5) +
-                s(mos_crop_n_patches, k = 5) +
-                s(mos_crop_patch_density, k = 5) +
-                s(mos_crop_prop, k = 5) +
-                s(mos_natural_n_patches, k = 5) +
-                s(mos_natural_patch_density, k = 5) +
-                s(mos_natural_prop, k = 5) +
-                s(shrub_n_patches, k = 5) +
-                s(shrub_patch_density, k = 5) +
-                s(shrub_prop, k = 5) +
-                s(shrub_evg_n_patches, k = 5) +
-                s(shrub_evg_patch_density, k = 5) +
-                s(shrub_evg_prop, k = 5) +
-                s(sparse_veg_n_patches, k = 5) +
-                s(sparse_veg_patch_density, k = 5) +
-                s(sparse_veg_prop, k = 5) +
-                s(tree_shrub_n_patches, k = 5) +
-                s(tree_shrub_patch_density, k = 5) + 
-                s(tree_shrub_prop, k = 5) +
-                s(grass_n_patches, k =5) +
-                s(grass_patch_density, k = 5) +
-                s(grass_prop, k = 5) +
-                s(urban_n_patches, k = 5) +
-                s(urban_patch_density, k = 5) +
-                s(urban_prop, k = 5) +
-                s(water_n_patches, k = 5) +
-                s(water_patch_density, k = 5) +
-                s(water_prop, k = 5) +
-                s(prec_mean, k = 5) +
+swk.int = gam(smr ~ district +
                 year +
-                district, 
-              data = sbh, method = 'REML',
-              family = poisson(link = log)
-              ) 
+                s(prec_mean) +
+                s(broad_evg_clop_prop) +
+                te(prec_mean, by = district) +
+                te(prec_mean, by = year) +
+                te(broad_evg_clop_prop, by = district)
+              ,
+              data = swk)
 
-summary(sbh.fit2)
-gam.check(sbh.fit2)
+summary(swk.int)
+gam.check(swk.int)
+plot(swk.int)
 ```
 
 Inspect model:
@@ -567,9 +670,4 @@ concurvity()
 VIF/tolerance
 summary()
 coef()
-```{r}
-summary(sbh_fit)
-gam.check(gam_sbh)
-```
-
 
