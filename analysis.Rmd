@@ -30,11 +30,14 @@ library(PerformanceAnalytics)
 library(car)
 library(olsrr)
 #library(MASS)
+#library(raster)
 ```
 
 READ: https://www.nature.com/articles/s41598-017-02560-z
 
 ### Import and clean data
+
+Two datasets are created, `swk` for Sarawak and `sbh` for Sabah. Variables that are not needed are removed.
 ```{r}
 swk = read.csv('./data/data_full_sar.csv') %>% 
   group_by(district, year) %>% 
@@ -82,7 +85,6 @@ swk = read.csv('./data/data_full_sar.csv') %>%
   rename('smr' = 'sir',
          'prec_mean' = 'mean',
          'cases' = 'case_number') %>% 
-  mutate(year = as.factor(year)) %>% 
   na.omit()
 
 
@@ -135,7 +137,6 @@ sbh = read.csv('./data/dataFull.csv') %>%
             'prevalence',
             'incidence_rate')) %>% 
   rename('cases' = 'number_cases') %>% 
-  mutate(year = as.factor(year)) %>% 
   na.omit()
 ```
 Observations with `NA` values were omitted from the data set
@@ -169,14 +170,26 @@ The Sarawak dataset does not have the following variables:
 `mos_tree_herb_total_area`
 `mos_tree_herb_prop`
 
+Creating one dataset, if I need to run model on one
 ```{r}
-summary(sbh)
+sbh2 = sbh %>% 
+  select(-c('grass_n_patches',
+            'grass_patch_density',
+            'grass_total_area',
+            'grass_prop',
+            'mos_tree_herb_n_patches',
+            'mos_tree_herb_patch_density',
+            'mos_tree_herb_total_area',
+            'mos_tree_herb_prop'))
+
+borneo = rbind(swk, sbh2)
 ```
 
 
 Correlation 
 ```{r}
 sbh_sub = sbh %>% 
+  filter(year == 2000) %>% 
   select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean"))
 
 res_sub <- rcorr(as.matrix(sbh_sub))
@@ -185,59 +198,13 @@ corrplot(res_sub$r, type = "lower",
         p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex = 0.5)
 
 swk_sub = swk %>%
+  filter(year == 2011) %>% 
   select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean"))
 
 res_sub2 <- rcorr(as.matrix(swk_sub))
 
 corrplot(res_sub2$r, type = "lower", 
         p.mat = res_sub2$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
-```
-
-Correlations between land use total area variables
-```{r}
-sbh_lu = sbh %>% 
-  select(c("broad_evg_clop_total_area", 
-           "crop_rainfed_total_area", 
-           "herbaceous_total_area", 
-           "shrub_total_area",
-           "shrub_evg_total_area",
-           "urban_total_area", 
-           "tree_shrub_total_area", 
-           "mos_crop_total_area", 
-           "mos_natural_total_area", 
-           "sparse_veg_total_area", 
-           "flood_fresh_total_area", 
-           "flood_salt_total_area", 
-           "water_total_area", 
-           "crop_irrigate_total_area",
-           "grass_total_area",
-           "mos_tree_herb_total_area"))
-
-res_lu <- rcorr(as.matrix(sbh_lu))
-
-corrplot(res_lu$r, type = "lower", 
-        p.mat = res_lu$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex = 0.5)
-
-swk_lu = swk %>% 
-  select(c("broad_evg_clop_total_area", 
-           "crop_rainfed_total_area", 
-           "herbaceous_total_area", 
-           "shrub_total_area",
-           "shrub_evg_total_area",
-           "urban_total_area", 
-           "tree_shrub_total_area", 
-           "mos_crop_total_area", 
-           "mos_natural_total_area", 
-           "sparse_veg_total_area", 
-           "flood_fresh_total_area", 
-           "flood_salt_total_area", 
-           "water_total_area", 
-           "crop_irrigate_total_area"))
-
-res_lu2 <- rcorr(as.matrix(swk_lu))
-
-corrplot(res_lu2$r, type = "lower", 
-        p.mat = res_lu2$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
 ```
 
 
@@ -266,47 +233,6 @@ featurePlot(swk.x,
 ```
 
 
-### Checking for Multicolliearity with Tolerance and VIF
-
-```{r}
-ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
-           crop_rainfed_total_area + 
-           herbaceous_total_area + 
-           shrub_total_area +
-           shrub_evg_total_area +
-           urban_total_area + 
-           tree_shrub_total_area + 
-           mos_crop_total_area + 
-           mos_natural_total_area + 
-           sparse_veg_total_area + 
-           flood_fresh_total_area + 
-           flood_salt_total_area + 
-           water_total_area + 
-           crop_irrigate_total_area +
-           mos_tree_herb_total_area +
-           grass_total_area, 
-           data = sbh))
-
-ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
-           crop_rainfed_total_area + 
-           herbaceous_total_area + 
-           shrub_total_area +
-           shrub_evg_total_area +
-           urban_total_area + 
-           tree_shrub_total_area + 
-           mos_crop_total_area + 
-           mos_natural_total_area + 
-           sparse_veg_total_area + 
-           flood_fresh_total_area + 
-           flood_salt_total_area + 
-           water_total_area + 
-           crop_irrigate_total_area, 
-           data = swk))
-```
-
-I will create general cropland variable to decrease the number of total variables and account for multicollinearity between many land use variables. This is based on the article "Comparison of Global Land Cover Datasets for
-Cropland Monitoring".
-
 ```{r}
 sbh = sbh %>% 
   group_by(district, year) %>% 
@@ -329,41 +255,7 @@ swk = swk %>%
   mutate(agri_prop = agri_total_area/district_area)
 ```
 
-Rechecking VIF after new variable for agriculture is created
-```{r}
-ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
-           shrub_total_area +
-           shrub_evg_total_area +
-           urban_total_area + 
-           agri_total_area + 
-           sparse_veg_total_area + 
-           flood_fresh_total_area + 
-           flood_salt_total_area + 
-           water_total_area + 
-           mos_tree_herb_total_area +
-           grass_total_area, 
-           data = sbh))
-
-ols_vif_tol(lm(smr ~ broad_evg_clop_total_area + 
-           shrub_total_area +
-           shrub_evg_total_area +
-           urban_total_area + 
-           agri_total_area + 
-           sparse_veg_total_area + 
-           flood_fresh_total_area + 
-           flood_salt_total_area + 
-           water_total_area, 
-           data = swk))
-```
-
-
 ### EDA and Visualization
-
-```{r}
-summary(swk)
-summary(sbh)
-```
-
 
 Looking at the distribution of the outcome (SMR) for both Sarawak and Sabah
 ```{r warning=FALSE}
@@ -559,74 +451,132 @@ mean_and_variance = rbind(Sabah, Sarawak)
 ```
 For both regions the mean and variance differ, indicating the need to use a negative binomal distribution instead of poisson.
 
+### Spatial Stuff
+```{r}
+library(raster)
+library(spdep)
+malaysia = getData('GADM', country='MYS', level=2)
+sabah = malaysia[malaysia$NAME_1 == 'Sabah',]
+sarawak = malaysia[malaysia$NAME_1 == 'Sarawak',]
+
+df = droplevels(as(sabah, 'data.frame'))
+
+aea.proj = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"
+shp = spTransform(sabah, CRS(aea.proj))  # project to Albers
+shpf = fortify(shp, region = 'NAME_2')
+
+df = transform(df, smr = sbh$smr)
+
+nb <- poly2nb(shp, row.names = df$NAME_2)
+names(nb) <- attr(nb, "region.id")
+str(nb[1:6])
+
+m1 <- gam(smr ~ s(NAME_2, bs = 'mrf', xt = list(nb = nb)), # define MRF smooth
+          data = df,
+          method = 'REML')
+```
+
 
 ### Fitting GAM for Sabah and Sarawak
 
-Sarawak
+splitting data into meaniful groups in order to fit data with GAMs
 ```{r}
-#library(MASS)
-#How do I run a time series using gam? From what I've seen I add interaction terms. I need to do time series with spatial considerations. How is this done?
-#Data does not allow for interactions... to many 
+train_sbh = sbh %>% 
+  filter(year %in% c(2000, 2001, 2002, 2003, 2005, 2006, 2008, 2009, 2010))
 
-swk.fit = gam(smr ~ s(prec_mean) +
-                s(broad_evg_clop_prop) +
-                s(broad_evg_clop_n_patches) +
-                s(broad_evg_clop_patch_density) +
-                s(agri_prop) +
-                s(crop_irrigate_n_patches) +
-                s(crop_irrigate_patch_density) +
-                s(crop_rainfed_n_patches) +
-                s(crop_rainfed_patch_density) +
-                s(herbaceous_n_patches) +
-                s(herbaceous_patch_density) +
-                s(mos_crop_n_patches) +
-                s(mos_crop_patch_density) +
-                s(mos_natural_n_patches) +
-                s(mos_natural_patch_density) +
-                s(tree_shrub_n_patches) +
-                s(tree_shrub_patch_density)
-                  ,
-              data = swk)
-
-summary(swk.fit)
-gam.check(swk.fit)
-plot(swk.fit)
-
-                #flood_fresh_n_patches +
-                #flood_fresh_patch_density +
-                #flood_fresh_prop +
-                #flood_salt_n_patches +
-                #flood_salt_patch_density +
-                #flood_salt_prop +
-                #shrub_n_patches +
-                #shrub_patch_density +
-                #shrub_prop +
-                #shrub_evg_n_patches +
-                #shrub_evg_patch_density +
-                #shrub_evg_prop +
-                #sparse_veg_n_patches +
-                #sparse_veg_patch_density +
-                #sparse_veg_prop +
-                #grass_n_patches +
-                #grass_patch_density +
-                #grass_prop +
-                #urban_n_patches +
-                #urban_patch_density +
-                #urban_prop +
-                #water_n_patches +
-                #water_patch_density +
-                #water_prop +
-                #year +
-                #district
+test_sbh = sbh %>% 
+  filter(year %in% c(2011, 2012, 2013)) 
 ```
 
-Sabah
 ```{r}
-sbh.fit = gam(smr ~ s(prec_mean) +
+sbh_forest.fit = gamm(smr ~ te(broad_evg_clop_prop, year, k = c(20, 9)) +
+                       te(broad_evg_clop_n_patches, year, k = c(10, 9)) +
+                       te(broad_evg_clop_patch_density, year, k = c(10, 9)),
+                     data = train_sbh, method = 'REML')
+
+sbh_agri.fit = gam(smr ~ te(agri_prop, year) +
+                       te(crop_rainfed_n_patches, year) +
+                       te(crop_rainfed_patch_density, year) +
+                       te(crop_irrigate_n_patches, year) +
+                       te(crop_irrigate_patch_density, year) +
+                       te(mos_crop_n_patches, year) +
+                       te(mos_crop_patch_density, year) +
+                       te(mos_natural_n_patches, year) +
+                       te(mos_natural_patch_density, year),
+                     data = train_sbh, method = 'REML')
+
+sbh_water.fit = gam(smr ~ te(prec_mean, year) +
+                      te(tree_shrub_patch_density, year) +
+                      te(flood_fresh_n_patches, year) +
+                      te(flood_fresh_patch_density, year) +
+                      te(flood_fresh_prop, year) +
+                      te(flood_salt_n_patches, year) +
+                      te(flood_salt_patch_density, year) +
+                      te(flood_salt_prop, year),
+                    data = train_sbh, method = 'REML')
+
+#plot(sbh_forest.fit$gam)
+#summary(sbh_forest.fit$gam)
+#gam.check(sbh_forest.fit$gam)
+
+pred_forest = predict(sbh_forest.fit$gam, newdata = test_sbh)
+pred_agri = predict(sbh_agri.fit, newdata = test_sbh)
+pred_water = predict(sbh_water.fit, newdata = test_sbh)
+
+mean(data.matrix(test_sbh[,57] - pred_forest)^2)
+mean(data.matrix(test_sbh[,57] - pred_agri)^2)
+mean(data.matrix(test_sbh[,57] - pred_water)^2)
+
+```
+
+
+Sarawak
+```{r}
+m = gamm(smr ~ s(year, k = 12),
+              data = sbh, method = 'REML')
+
+summary(m)
+plot(m$gam)
+```
+
+```{r}
+layout(matrix(1:2, ncol = 2))
+acf(resid(m$lme), lag.max = 36, main = "ACF")
+pacf(resid(m$lme), lag.max = 36, main = "pACF")
+layout(1)
+```
+
+
+Autocorrelation for time (year)
+```{r}
+ctrl <- list(niterEM = 0, msVerbose = TRUE, optimMethod="L-BFGS-B")
+
+#AR(1)
+m1 = gamm(smr ~ s(year, k = 12),
+           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 1),
+           control = ctrl)
+## AR(2)
+m2 = gamm(smr ~ s(year, k = 12),
+           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 2),
+           control = ctrl)
+
+## AR(3)
+m3 = gamm(smr ~ s(year, k = 12),
+           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 3),
+           control = ctrl)
+```
+
+```{r}
+anova(m$lme, m1$lme, m2$lme, m3$lme)
+```
+
+
+
+```{r}
+ = gam(smr ~ s(prec_mean) +
                 s(broad_evg_clop_prop) +
                 s(broad_evg_clop_n_patches) +
                 s(broad_evg_clop_patch_density) +
-                s(agri_prop) +
                 s(crop_irrigate_n_patches) +
                 s(crop_irrigate_patch_density) +
                 s(crop_rainfed_n_patches) +
@@ -638,7 +588,33 @@ sbh.fit = gam(smr ~ s(prec_mean) +
                 s(mos_natural_n_patches) +
                 s(mos_natural_patch_density) +
                 s(tree_shrub_n_patches) +
-                s(tree_shrub_patch_density)
+                s(tree_shrub_patch_density) +
+                s(flood_fresh_n_patches) +
+                s(flood_fresh_patch_density) +
+                s(flood_fresh_prop) +
+                s(flood_salt_n_patches) +
+                s(flood_salt_patch_density) +
+                s(flood_salt_prop) +
+                s(shrub_n_patches) +
+                s(shrub_patch_density) +
+                s(shrub_prop) +
+                s(shrub_evg_n_patches) +
+                s(shrub_evg_patch_density) +
+                s(shrub_evg_prop) +
+                s(sparse_veg_n_patches) +
+                s(sparse_veg_patch_density) +
+                s(sparse_veg_prop) +
+                s(grass_n_patches) +
+                s(grass_patch_density) +
+                s(grass_prop) +
+                s(urban_n_patches) +
+                s(urban_patch_density) +
+                s(urban_prop) +
+                s(water_n_patches) +
+                s(water_patch_density) +
+                s(water_prop) +
+                s(year) +
+                district
                   ,
               data = sbh)
 
@@ -647,22 +623,154 @@ gam.check(sbh.fit)
 plot(sbh.fit)
 ```
 
+### Using Caret
 
+preprocess data
 ```{r}
-swk.int = gam(smr ~ district +
-                year +
-                s(prec_mean) +
-                s(broad_evg_clop_prop) +
-                te(prec_mean, by = district) +
-                te(prec_mean, by = year) +
-                te(broad_evg_clop_prop, by = district)
-              ,
-              data = swk)
+sbh_var = sbh %>% 
+  select(c("smr", 
+           "broad_evg_clop_prop", 
+           "crop_rainfed_prop", 
+           "herbaceous_prop", 
+           "shrub_prop", "urban_prop", 
+           "tree_shrub_prop", 
+           "mos_crop_prop", 
+           "mos_natural_prop", 
+           "sparse_veg_prop", 
+           "flood_fresh_prop", 
+           "flood_salt_prop", 
+           "water_prop", 
+           "crop_irrigate_prop", 
+           "shrub_evg_prop", 
+           "shrub_evg_n_patches", 
+           "broad_evg_clop_n_patches", 
+           "crop_rainfed_n_patches", 
+           "herbaceous_n_patches", 
+           "shrub_n_patches", 
+           "urban_n_patches", 
+           "tree_shrub_n_patches", 
+           "mos_crop_n_patches", 
+           "mos_natural_n_patches", 
+           "sparse_veg_n_patches", 
+           "flood_fresh_n_patches", 
+           "flood_salt_n_patches", 
+           "water_n_patches", 
+           "crop_irrigate_n_patches", 
+           "broad_evg_clop_patch_density",
+           "crop_rainfed_patch_density", 
+           "herbaceous_patch_density", 
+           "shrub_patch_density", 
+           "urban_patch_density", 
+           "tree_shrub_patch_density", 
+           "mos_crop_patch_density", 
+           "mos_natural_patch_density", 
+           "sparse_veg_patch_density", 
+           "flood_fresh_patch_density", 
+           "flood_salt_patch_density", 
+           "water_patch_density", 
+           "crop_irrigate_patch_density", 
+           "shrub_evg_patch_density",
+           "grass_n_patches",
+           "grass_patch_density",
+           "grass_prop",
+           "mos_tree_herb_n_patches",
+           "mos_tree_herb_patch_density",
+           "mos_tree_herb_prop",
+           "prec_mean", 
+           "year", 
+           "district"))
 
-summary(swk.int)
-gam.check(swk.int)
-plot(swk.int)
+
+swk_var = swk %>%
+  select(c("smr", 
+           "broad_evg_clop_prop", 
+           "crop_rainfed_prop", 
+           "herbaceous_prop", 
+           "shrub_prop", "urban_prop", 
+           "tree_shrub_prop", 
+           "mos_crop_prop", 
+           "mos_natural_prop", 
+           "sparse_veg_prop", 
+           "flood_fresh_prop", 
+           "flood_salt_prop", 
+           "water_prop", 
+           "crop_irrigate_prop", 
+           "shrub_evg_prop", 
+           "shrub_evg_n_patches", 
+           "broad_evg_clop_n_patches", 
+           "crop_rainfed_n_patches", 
+           "herbaceous_n_patches", 
+           "shrub_n_patches", 
+           "urban_n_patches", 
+           "tree_shrub_n_patches", 
+           "mos_crop_n_patches", 
+           "mos_natural_n_patches", 
+           "sparse_veg_n_patches", 
+           "flood_fresh_n_patches", 
+           "flood_salt_n_patches", 
+           "water_n_patches", 
+           "crop_irrigate_n_patches", 
+           "broad_evg_clop_patch_density",
+           "crop_rainfed_patch_density", 
+           "herbaceous_patch_density", 
+           "shrub_patch_density", 
+           "urban_patch_density", 
+           "tree_shrub_patch_density", 
+           "mos_crop_patch_density", 
+           "mos_natural_patch_density", 
+           "sparse_veg_patch_density", 
+           "flood_fresh_patch_density", 
+           "flood_salt_patch_density", 
+           "water_patch_density", 
+           "crop_irrigate_patch_density", 
+           "shrub_evg_patch_density", 
+           "prec_mean", 
+           "year", 
+           "district"))
+
+sbh.x = model.matrix(smr~., sbh_var, na.action = NULL)[,-1]
+sbh.y = sbh_sub$smr
+
+swk.x = model.matrix(smr~., swk_var)[,-1]
+swk.y = swk_sub$smr
+
+# add interaction terms
+sbh.yd = as.data.frame(sbh.x) %>% 
+  select("year2001":"districtTuaran") 
+sbh.yd = as.matrix(sbh.yd)
+
+sbh.temp = sbh_var %>% 
+  select(-c("year", "district")) 
+sbh.temp = as.matrix(sbh.temp)
+
+sbh.int = sbh.yd*sbh.temp
 ```
+
+
+sbh
+```{r}
+ctrl1 <- trainControl(method = "cv", number = 10)
+
+set.seed(1)
+
+sbh.lm = train(sbh.x, sbh.y,
+                 method = "lm",
+                 preProc = c("scale"), #scaling data in order to compare coefficients
+                 trControl = ctrl1)
+
+var_imp = as.data.frame(sbh.lm$finalModel$coefficients)
+
+set.seed(1)
+
+swk.lm = train(swk.x, swk.y,
+                 method = "lm",
+                 preProc = c("scale"), #scaling data in order to compare coefficients
+                 trControl = ctrl1)
+
+var_imp_swk = as.data.frame(swk.lm$finalModel$coefficients)
+```
+
+
 
 Inspect model:
 gam.check()

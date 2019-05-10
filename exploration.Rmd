@@ -1,0 +1,372 @@
+---
+title: "Exploration of Data"
+author: "Matthew Perrotta"
+date: "5/10/2019"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+```{r echo = T, message = FALSE, results='hide', warning=FALSE}
+library(tidyverse)
+library(mgcv)
+library(corrplot)
+library(Hmisc)
+library(caret)
+library(PerformanceAnalytics)
+library(car)
+library(olsrr)
+#library(MASS)
+#library(raster)
+```
+
+READ: https://www.nature.com/articles/s41598-017-02560-z
+
+### Import and clean data
+
+Two datasets are created, `swk` for Sarawak and `sbh` for Sabah. Variables that are not needed are removed.
+```{r}
+swk = read.csv('./data/data_full_sar.csv') %>% 
+  group_by(district, year) %>% 
+  mutate(district_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area 
+         ) %>%
+  ungroup() %>% 
+  group_by(district) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
+         Herbaceous.prop = Herbaceous.total.area/district_area,
+         TreeShrub.prop = TreeShrub.total.area/district_area,
+         MosCrop.prop = MosCrop.total.area/district_area,
+         MosNatural.prop = MosNatural.total.area/district_area,
+         BroadEvgClop.prop = BroadEvgClop.total.area/district_area,
+         Shrub.prop = Shrub.total.area/district_area,
+         ShrubEvg.prop = ShrubEvg.total.area/district_area,
+         SparseVeg.prop = SparseVeg.total.area/district_area,
+         FloodFresh.prop = FloodFresh.total.area/district_area,
+         FloodSalt.prop = FloodSalt.total.area/district_area,
+         Urban.prop = Urban.total.area/district_area,
+         Water.prop = Water.total.area/district_area,
+         CropIrrigate.prop = CropIrrigate.total.area/district_area) %>% 
+  janitor::clean_names() %>%
+  ungroup() %>%  
+  select(-c('x',
+            'population_year',
+            'cases_year',
+            'expected',
+            'sd')) %>% 
+  rename('smr' = 'sir',
+         'prec_mean' = 'mean',
+         'cases' = 'case_number') %>% 
+  na.omit()
+
+
+sbh = read.csv('./data/dataFull.csv') %>% 
+  group_by(District, Year) %>% 
+  mutate(district_area = 
+           CropRainfed.total.area + 
+           Herbaceous.total.area + 
+           TreeShrub.total.area +
+           MosCrop.total.area +
+           MosNatural.total.area + 
+           BroadEvgClop.total.area +
+           Shrub.total.area +
+           ShrubEvg.total.area +
+           SparseVeg.total.area +
+           FloodFresh.total.area +
+           FloodSalt.total.area +
+           Urban.total.area +
+           Water.total.area +
+           CropIrrigate.total.area +
+           Grass.total.area +
+           MosTreeHerb.total.area
+         ) %>%
+  ungroup() %>% 
+  group_by(District) %>%
+  mutate(CropRainfed.prop = CropRainfed.total.area/district_area,
+         Herbaceous.prop = Herbaceous.total.area/district_area,
+         TreeShrub.prop = TreeShrub.total.area/district_area,
+         MosCrop.prop = MosCrop.total.area/district_area,
+         MosNatural.prop = MosNatural.total.area/district_area,
+         BroadEvgClop.prop = BroadEvgClop.total.area/district_area,
+         Shrub.prop = Shrub.total.area/district_area,
+         ShrubEvg.prop = ShrubEvg.total.area/district_area,
+         SparseVeg.prop = SparseVeg.total.area/district_area,
+         FloodFresh.prop = FloodFresh.total.area/district_area,
+         FloodSalt.prop = FloodSalt.total.area/district_area,
+         Urban.prop = Urban.total.area/district_area,
+         Water.prop = Water.total.area/district_area,
+         CropIrrigate.prop = CropIrrigate.total.area/district_area,
+         Grass.prop = Grass.total.area/district_area,
+         MosTreeHerb.prop = MosTreeHerb.total.area/district_area) %>% 
+  janitor::clean_names() %>%
+  ungroup() %>%
+  select(-c('x', 
+            'disease', 
+            'number_deaths', 
+            'mortality_rates',
+            'prevalence',
+            'incidence_rate')) %>% 
+  rename('cases' = 'number_cases') %>% 
+  na.omit()
+```
+Observations with `NA` values were omitted from the data set
+
+Land Cover variable discriptions:
+
+  * `crop_rainfed` - Cropland, rainfed
+  * `crop_irrigate` - Cropland, irrigated or post-flooding
+  * `mos_crop` - Mosaic cropland (>50%) / natural vegetation (tree, shrub, herbaceous cover)(<50%) 
+  * `mos_natural` - Mosaic natural vegetation (tree, shrub, herbaceous cover) (>50%) / cropland (<50%) 
+  * `mos_tree_herb` - Mosaic tree and shrub (>50%) / herbaceous cover (<50%)
+  * `herbaceous` - Herbaceous cover
+  * `tree_shrub` - Tree or shrub cover	
+  * `broad_evg_clop` - Tree cover, broadleaved, evergreen, closed to open (>15%)
+  * `shrub` - Shrubland
+  * `shrub_evg` - Shrubland evergreen	
+  * `sparse_veg` - Sparse vegetation (tree, shrub, herbaceous cover) (<15%)	
+  * `flood_fresh` - Tree cover, flooded, fresh or brakish water	
+  * `flood_salt` - Tree cover, flooded, saline water	
+  * `grass` - Grassland
+  * `urban` - Urban areas	
+  * `water` - Water bodies	
+
+
+The Sarawak dataset does not have the following variables: 
+
+  * `grass_n_patches`
+  * `grass_patch_density`
+  * `grass_total_area`
+  * `grass_prop`
+  * `mos_tree_herb_n_patches`
+  * `mos_tree_herb_patch_density`
+  * `mos_tree_herb_total_area`
+  * `mos_tree_herb_prop`
+
+Creating a variable for agriculture
+```{r}
+sbh = sbh %>% 
+  group_by(district, year) %>% 
+  mutate(agri_total_area = crop_rainfed_total_area + 
+           crop_irrigate_total_area +
+           herbaceous_total_area +
+           tree_shrub_total_area +
+           mos_crop_total_area + 
+           mos_natural_total_area) %>% 
+  mutate(agri_prop = agri_total_area/district_area)
+
+swk = swk %>% 
+  group_by(district, year) %>% 
+  mutate(agri_total_area = crop_rainfed_total_area + 
+           crop_irrigate_total_area +
+           herbaceous_total_area +
+           tree_shrub_total_area +
+           mos_crop_total_area + 
+           mos_natural_total_area) %>% 
+  mutate(agri_prop = agri_total_area/district_area)
+```
+
+
+### Exploration of the Data
+
+
+```{r}
+sbh_sub = sbh %>% 
+  select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean"))
+
+swk_sub = swk %>% 
+  select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean"))
+
+sbh.x = model.matrix(smr~., sbh_sub, na.action = NULL)[,-1]
+sbh.y = sbh_sub$smr
+
+swk.x = model.matrix(smr~., swk_sub)[,-1]
+swk.y = swk_sub$smr
+
+featurePlot(sbh.x, 
+            sbh.y, 
+            plot = "scatter", 
+            labels = c("Predictors","SMR"),
+            type = c('p'))
+
+featurePlot(swk.x, 
+            swk.y, 
+            plot = "scatter", 
+            labels = c("Predictors","SMR"),
+            type = c('p'))
+```
+
+Distribution of SMR
+```{r warning=FALSE}
+ggplot(data = swk, aes(x = smr)) +  
+  geom_density() +
+  labs(title = 'SMR distribution, Sarawak')
+
+ggplot(data = sbh, aes(x = smr)) +  
+  geom_density() +
+  labs(title = 'SMR distribution, Sabah') 
+```
+
+Distribution of cases
+```{r warning=FALSE}
+ggplot(data = swk, aes(x = cases)) +  
+  geom_density() +
+  labs(title = 'Distribution of Cases, Sarawak')
+
+ggplot(data = sbh, aes(x = cases)) +  
+  geom_density() +
+  labs(title = 'Distribution of Cases, Sabah') 
+```
+
+Cases overtime
+```{r}
+swk %>% 
+  group_by(year) %>% 
+  mutate(total_cases = sum(cases)) %>% 
+  ggplot(aes(y = total_cases, x = year)) +
+  geom_line() +
+  labs(title = 'Cases overtime, Sarawak')
+
+sbh %>% 
+  group_by(year) %>% 
+  mutate(total_cases = sum(cases)) %>% 
+  ggplot(aes(y = total_cases, x = year)) +
+  geom_line() +
+  labs(title = 'Cases overtime, Sabah')
+```
+
+### Spaghetti Plots
+
+SMR by District
+```{r}
+swk %>%
+  ggplot(aes(y = smr, x = year, color = district)) +
+  geom_line() +
+  labs(title = 'SMR by district, Sarawak')
+
+sbh %>% 
+  ggplot(aes(y = smr, x = year, color = district)) +
+  geom_line() +
+  labs(title = 'SMR by district, Sabah')
+```
+
+Cases by district
+```{r}
+swk %>%
+  ggplot(aes(y = cases, x = year, color = district)) +
+  geom_line() +
+  labs(title = 'Cases by district, Sarawak')
+
+sbh %>% 
+  ggplot(aes(y = cases, x = year, color = district)) +
+  geom_line() +
+  labs(title = 'Cases by district, Sabah')
+```
+
+Mean precipitation across districts of Sabah and Sarawak
+```{r}
+ggplot(data = swk, aes(x = year, y = prec_mean, color = district)) +  
+  geom_line() +
+  labs(title = 'Mean Precipitation, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = prec_mean, color = district)) +  
+  geom_line() +
+  labs(title = 'Mean Precipitation, Sabah')
+```
+
+Forest cover across districts, Sarawak and Sabah
+```{r}
+#Total area
+ggplot(data = swk, aes(x = year, y = broad_evg_clop_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Forest Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = broad_evg_clop_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Forest Cover, Sabah')
+
+#Number of patches
+ggplot(data = swk, aes(x = year, y = broad_evg_clop_n_patches, color = district)) +  
+  geom_line() +
+  labs(title = 'Number of Patches, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = broad_evg_clop_n_patches, color = district)) +  
+  geom_line() +
+  labs(title = 'Number of Patches, Sabah')
+
+#Patch density
+ggplot(data = swk, aes(x = year, y = broad_evg_clop_patch_density, color = district)) +  
+  geom_line() +
+  labs(title = 'Patch Density, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = broad_evg_clop_patch_density, color = district)) +  
+  geom_line() +
+  labs(title = 'Patch Density, Sabah')
+
+#Patch density
+ggplot(data = swk, aes(x = year, y = broad_evg_clop_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Forest Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = broad_evg_clop_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Forest Cover, Sabah')
+```
+
+Agricultural cover across districts, Sarawak and Sabah
+```{r}
+#Total area
+ggplot(data = swk, aes(x = year, y = agri_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Agricultural Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = agri_total_area, color = district)) +  
+  geom_line() +
+  labs(title = 'Total Agricultural Cover, Sabah')
+
+#Proportion
+ggplot(data = swk, aes(x = year, y = agri_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Agricultural Cover, Sarawak')
+
+ggplot(data = sbh, aes(x = year, y = agri_prop, color = district)) +  
+  geom_line() +
+  labs(title = 'Proportion Agricultural Cover, Sabah')
+```
+
+### Correlations
+
+```{r}
+sbh_sub = sbh %>% 
+  select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean", 'district', 'year'))
+
+res_sub <- rcorr(as.matrix(sbh_sub))
+
+corrplot(res_sub$r, type = "lower", 
+        p.mat = res_sub$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex = 0.5)
+
+swk_sub = swk %>% 
+  select(c("smr", "broad_evg_clop_prop", "crop_rainfed_prop", "herbaceous_prop", "shrub_prop", "urban_prop", "tree_shrub_prop", "mos_crop_prop", "mos_natural_prop", "sparse_veg_prop", "flood_fresh_prop", "flood_salt_prop", "water_prop", "crop_irrigate_prop", "shrub_evg_prop", "shrub_evg_n_patches", "broad_evg_clop_n_patches", "crop_rainfed_n_patches", "herbaceous_n_patches", "shrub_n_patches", "urban_n_patches", "tree_shrub_n_patches", "mos_crop_n_patches", "mos_natural_n_patches", "sparse_veg_n_patches", "flood_fresh_n_patches", "flood_salt_n_patches", "water_n_patches", "crop_irrigate_n_patches", "broad_evg_clop_patch_density","crop_rainfed_patch_density", "herbaceous_patch_density", "shrub_patch_density", "urban_patch_density", "tree_shrub_patch_density", "mos_crop_patch_density", "mos_natural_patch_density", "sparse_veg_patch_density", "flood_fresh_patch_density", "flood_salt_patch_density", "water_patch_density", "crop_irrigate_patch_density", "shrub_evg_patch_density", "prec_mean"))
+
+res_sub2 <- rcorr(as.matrix(swk_sub))
+
+corrplot(res_sub2$r, type = "lower", 
+        p.mat = res_sub2$P, sig.level = 0.01, insig = "blank", tl.col = "black", tl.cex = 0.5, cl.cex=0.5)
+```
+
