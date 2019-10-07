@@ -22,13 +22,13 @@ library(leaflet)
  - Read data_full.csv. The data_full dataset contains data on malaria cases, land use cover, precipations, and Standarized Mortality Ratio (SMR).
  - Read SpatialPolygonDataFrame *sab*. sab contains spatial data on the location of the 25 Sabah districts.
 ```{r Read data}
-P <- rprojroot::find_rstudio_root_file
 data_full <- read.csv('./data/dataFull.csv') 
   data_full <- data_full[-1]   
     data_full <- data_full[-3]
 data_full <- data_full[complete.cases(data_full[,3]),] 
   data_full <- data.frame(data_full)
-sab <- Sabah_shp
+malaysia <- getData('GADM', country='MYS', level=2)
+sab <- malaysia[malaysia$NAME_1 == 'Sabah',]
 ```
 
 #### Calculate SMR:
@@ -208,6 +208,7 @@ pdf("Figure1and3.pdf")
 grid.arrange(plot1, plot3, ncol=2)
 dev.off()
 ```
+
 ```{r}
 pdf("Figure2and4.pdf")
 grid.arrange(plot2, plot4, ncol=2)

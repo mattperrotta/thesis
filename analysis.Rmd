@@ -382,7 +382,6 @@ swk.p = glm(smr ~
                 water_patch_density +
                 agri_prop +
                 water_prop +
-                pop_density +
                 prec_mean,
               data = swk, family = poisson(link = log)
               )
@@ -461,19 +460,32 @@ sarawak = malaysia[malaysia$NAME_1 == 'Sarawak',]
 
 df = droplevels(as(sabah, 'data.frame'))
 
-aea.proj = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"
-shp = spTransform(sabah, CRS(aea.proj))  # project to Albers
+#aea.proj = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"
+#shp = spTransform(sabah, CRS(aea.proj))  # project to Albers
 shpf = fortify(shp, region = 'NAME_2')
 
-df = transform(df, smr = sbh$smr)
+####
+smr00 = sbh %>% 
+  filter(year == 2000) %>% 
+  dplyr::select('smr')
 
-nb <- poly2nb(shp, row.names = df$NAME_2)
+df = transform(df, smr = smr00)
+
+nb <- poly2nb(sabah, row.names = df$NAME_2)
 names(nb) <- attr(nb, "region.id")
-str(nb[1:6])
 
-m1 <- gam(smr ~ s(NAME_2, bs = 'mrf', xt = list(nb = nb)), # define MRF smooth
+m1 <- gam(smr ~ s(as.factor(NAME_2), bs = 'mrf', xt = list(nb = nb)), # define MRF smooth
           data = df,
           method = 'REML')
+
+df <- transform(df, mrfFull = predict(m1, type = 'response'))
+
+mdata <- left_join(shpf, df, by = c('id' = 'NAME_2'))
+
+ggplot(mdata, aes(x = lat, y = long, group = group)) +
+    geom_polygon(aes(fill = mrfFull)) +
+    geom_path(col = 'black', alpha = 0.5, size = 0.1) +
+    coord_equal()
 ```
 
 
@@ -482,16 +494,16 @@ m1 <- gam(smr ~ s(NAME_2, bs = 'mrf', xt = list(nb = nb)), # define MRF smooth
 splitting data into meaniful groups in order to fit data with GAMs
 ```{r}
 train_sbh = sbh %>% 
-  filter(year %in% c(2000, 2001, 2002, 2003, 2005, 2006, 2008, 2009, 2010))
+  filter(year %in% c(2000, 2001, 2002, 2003, 2005, 2006, 2008, 2009, 2010, 2011, 2012))
 
 test_sbh = sbh %>% 
-  filter(year %in% c(2011, 2012, 2013)) 
+  filter(year %in% c(2010, 2011, 2012, 2013)) 
 ```
 
 ```{r}
-sbh_forest.fit = gamm(smr ~ te(broad_evg_clop_prop, year, k = c(20, 9)) +
-                       te(broad_evg_clop_n_patches, year, k = c(10, 9)) +
-                       te(broad_evg_clop_patch_density, year, k = c(10, 9)),
+sbh_forest.fit = gamm(smr ~ te(broad_evg_clop_prop, year) +
+                       te(broad_evg_clop_n_patches, year) +
+                       te(broad_evg_clop_patch_density, year),
                      data = train_sbh, method = 'REML')
 
 sbh_agri.fit = gam(smr ~ te(agri_prop, year) +
@@ -557,12 +569,12 @@ m1 = gamm(smr ~ s(year, k = 12),
            control = ctrl)
 ## AR(2)
 m2 = gamm(smr ~ s(year, k = 12),
-           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 2),
+           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 6),
            control = ctrl)
 
 ## AR(3)
 m3 = gamm(smr ~ s(year, k = 12),
-           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 3),
+           data = sbh, method = 'REML', correlation = corARMA(form = ~ 1|year, p = 7),
            control = ctrl)
 ```
 
